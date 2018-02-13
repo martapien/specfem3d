@@ -1,0 +1,16 @@
+AxiSEM_modif_for_coupling_with_specfem/SOLVER/*.mod
+AxiSEM_modif_for_coupling_with_specfem/SOLVER/*.o
+AxiSEM_modif_for_coupling_with_specfem/MESHER/*.o
+AxiSEM_modif_for_coupling_with_specfem/MESHER/*.mod
+UTILS_COUPLING_SpecFEM/*.mod
+UTILS_COUPLING_SpecFEM/*.o
+AxiSEM_modif_for_coupling_with_specfem/SOLVER/UTILS/*.o
+AxiSEM_modif_for_coupling_with_specfem/SOLVER/UTILS/*.mod
+AxiSEM_modif_for_coupling_with_specfem/MESHER/xmesh
+AxiSEM_modif_for_coupling_with_specfem/SOLVER/UTILS/xfield_transform
+AxiSEM_modif_for_coupling_with_specfem/SOLVER/UTILS/xpost_processing
+AxiSEM_modif_for_coupling_with_specfem/SOLVER/axisem
+UTILS_COUPLING_SpecFEM/create_stations.x
+UTILS_COUPLING_SpecFEM/xexpand_2D_3D
+UTILS_COUPLING_SpecFEM/xreformat
+

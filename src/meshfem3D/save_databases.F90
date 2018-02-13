@@ -109,7 +109,7 @@
 
   ! stores mesh files as cubit for single process run
   ! todo: we could put this parameter into the Mesh_Par_file
-  logical, parameter :: SAVE_MESH_AS_CUBIT = .false.
+  logical, parameter :: SAVE_MESH_AS_CUBIT = .true.
 
   !------------------------------------------------------------------
 
@@ -425,7 +425,10 @@
 
   use constants, only: MAX_STRING_LEN,IDOMAIN_ACOUSTIC,IDOMAIN_ELASTIC, NGLLX, NGLLY, NGLLZ, NDIM, ZERO
 
-  use shared_parameters, only: NGNOD,COUPLE_WITH_INJECTION_TECHNIQUE,INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_AXISEM
+  use shared_parameters, only: NGNOD,COUPLE_WITH_INJECTION_TECHNIQUE, &
+    INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_AXISEM, INJECTION_TECHNIQUE_IS_INSTASEIS
+
+  use HDF5
 
     implicit none
 
@@ -504,6 +507,27 @@
 
     character(len=10)  :: line
     character(len=250) :: model1D_file
+
+    !! MPC hdf5 interface
+
+    character(len=21), parameter :: hdf5_file = "gll_coordinates.hdf5" ! File name
+    character(len=5),  parameter :: grp_local = "local"
+    character(len=22), parameter :: attr_rotmat = "rotmat_xyz_loc_to_glob"
+    integer(hid_t) :: file_id           ! File identifier
+    integer(hid_t) :: grp_local_id      ! Group identifier
+    integer(hid_t) :: attr_rotmat_id          ! Attribute identifier
+    integer(hid_t) :: aspace_rotmat_id        ! Attribute dataspace identifier
+    integer :: rotmat_rank = 2                        ! Attribure rank
+    integer(hsize_t), dimension(2) :: rotmat_dims     ! Attribute dimension
+    integer :: error                          ! Error flag
+    real, allocatable :: rotmat_transpose(:, :)
+
+    character(len=17), parameter :: attr_radius = "radius_of_box_top"
+    integer(hid_t) :: attr_radius_id          ! Attribute identifier
+    integer(hid_t) :: aspace_radius_id        ! Attribute dataspace identifier
+    integer :: radius_rank = 1                        ! Attribure rank
+    integer(hsize_t), dimension(1) :: radius_dims     ! Attribute dimension
+
 
 1000 format(3f30.10)
 
@@ -603,7 +627,9 @@
     close(IIN_database)
 
 !! VM VM add files in case of AxiSEM coupling
-    if (COUPLE_WITH_INJECTION_TECHNIQUE .and. INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+    if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
+      ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+       (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS))) then
 
        allocate(longitud(NGLLX,NGLLY,NGLLZ), latitud(NGLLX,NGLLY,NGLLZ), radius(NGLLX,NGLLY,NGLLZ))
        allocate(xstore(NGLLX,NGLLY,NGLLZ), ystore(NGLLX,NGLLY,NGLLZ), zstore(NGLLX,NGLLY,NGLLZ))
@@ -679,6 +705,43 @@
         ! compute rotation matrix
        call compute_rotation_matrix(rotation_matrix,lon_center_chunk,lat_center_chunk, chunk_azi)
 
+       if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) then
+         !! MPC save rotation matrix to a file
+         !! MPC remember that everytihng gets transposed when dumped to hdf5!
+         allocate(rotmat_transpose(3, 3))
+         rotmat_transpose = transpose(rotation_matrix)
+         rotmat_dims(1) = 3
+         rotmat_dims(2) = 3
+         radius_dims = 1
+         ! Initialize hdf5 interface
+         call h5open_f(error)
+         ! Create the file collectively.
+         call h5fcreate_f(hdf5_file, H5F_ACC_TRUNC_F, file_id, error)
+         ! Create new groups
+         call h5gcreate_f(file_id, grp_local, grp_local_id, error)
+         call h5screate_simple_f(rotmat_rank, rotmat_dims, aspace_rotmat_id, error)
+         call h5acreate_f(grp_local_id, attr_rotmat, H5T_NATIVE_REAL, &
+                       aspace_rotmat_id, attr_rotmat_id, error)
+         call h5awrite_f(attr_rotmat_id, H5T_NATIVE_REAL, rotmat_transpose, &
+                         rotmat_dims, error)
+
+         call h5screate_simple_f(radius_rank, radius_dims, aspace_radius_id, error)
+         call h5acreate_f(grp_local_id, attr_radius, H5T_IEEE_F64LE, &
+                        aspace_radius_id, attr_radius_id, error)
+         call h5awrite_f(attr_radius_id, H5T_NATIVE_DOUBLE, radius_of_box_top, &
+                         radius_dims, error)
+
+         call h5sclose_f(aspace_rotmat_id, error)
+         call h5aclose_f(attr_rotmat_id, error)
+         call h5sclose_f(aspace_radius_id, error)
+         call h5aclose_f(attr_radius_id, error)
+         call h5gclose_f(grp_local_id, error)
+         ! Close the file.
+         call h5fclose_f(file_id, error)
+         ! Close hdf5 interface
+         call h5close_f(error)
+       endif
+
        open(91, file = 'MESH/list_ggl_boundary_spherical.txt')
        open(92, file = 'MESH/list_ggl_boundary_Cartesian.txt')
        open(89, file = 'MESH/flags_boundary.txt')
@@ -727,9 +790,9 @@
           zelm(8)=zgrid(1,2,2,ispec)
 
           call calc_gll_points(xelm,yelm,zelm,xstore,ystore,zstore,shape3D,NGNOD,NGLLX,NGLLY,NGLLZ)
-          zstore(:,:,:) = zstore(:,:,:) + radius_of_box_top !6371000.
+          zstore(:,:,:) = zstore(:,:,:) + radius_of_box_top ! 6371000.
           call Cartesian2spheric(xstore,ystore,zstore,rotation_matrix,longitud,latitud,radius,deg2rad)
-          zstore(:,:,:) = zstore(:,:,:) -radius_of_box_top ! 6371000.
+          zstore(:,:,:) = zstore(:,:,:) - radius_of_box_top ! 6371000.
           call find_layer_in_axisem_model(ilayer,updown,radius(3,3,:),zlayer,nlayer)
 
           imin = 1
@@ -1052,4 +1115,3 @@
     endif
 
   end subroutine save_output_mesh_files_as_cubit
-

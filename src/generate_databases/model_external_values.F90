@@ -68,7 +68,7 @@
 !
 
   subroutine model_external_broadcast(myrank)
-
+! lecture du modele 
 ! standard routine to setup model
 
   use external_model
@@ -136,7 +136,7 @@
     character(len=256):: filename
     integer i,cc
     double precision aa,bb
-
+    ! lecture de polynome
     filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//'/coeff_poly_deg12'
     open(27,file=trim(filename))
     read(27,*) ndeg_poly

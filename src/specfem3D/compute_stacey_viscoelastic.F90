@@ -39,12 +39,22 @@
 
   use constants
 
-  use specfem_par, only: it_dsm, it_fk, Veloc_dsm_boundary, Tract_dsm_boundary, Veloc_axisem, Tract_axisem, Tract_axisem_time
+  !! MPC for Instaseis-Specfem HDF5 dumps
+  use HDF5
 
-  use specfem_par_elastic, only: displ
+  use specfem_par, only: it_dsm, it_fk, Veloc_dsm_boundary, Tract_dsm_boundary, &
+            Veloc_axisem, Tract_axisem, Tract_axisem_time, myrank, sizeprocs
+
+  use specfem_par_elastic, only: displ, & !epsilon_trace_over_3, &
+          epsilondev_xx, epsilondev_yy, epsilon_trace_new, &
+          epsilondev_xy, epsilondev_xz, epsilondev_yz
 
   use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, &
-                  INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_DSM,INJECTION_TECHNIQUE_IS_AXISEM,INJECTION_TECHNIQUE_IS_FK, &
+                  INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_DSM, &
+                  INJECTION_TECHNIQUE_IS_AXISEM,INJECTION_TECHNIQUE_IS_FK, &
+                  INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INJECTION_BOX_LOCATION, &
+                  INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER, &
+                  INSTASEIS_INJECTION_BOX_LOCATION_SOURCE, &
                   old_DSM_coupling_from_Vadim,RECIPROCITY_AND_KH_INTEGRAL,SAVE_RUN_BOUN_FOR_KH_INTEGRAL,Ntime_step_dsm
 
 ! *********************************************************************************
@@ -120,6 +130,59 @@
   real(kind=CUSTOM_REAL) ::  cs_single(4) !vx_FK,vy_FK,vz_FK,tx_FK,ty_FK,tz_FK
 ! *********************************************************************************
 
+  !! MPC for Instaseis-Specfem HDF5 dumps
+  ! Names (file and HDF5 objects)
+  character(len=17), parameter :: hdf5_file_write = "specfem_dump.hdf5"
+  character(len=20), parameter :: hdf5_file_read = "gll_coordinates.hdf5"
+  character(len=5), parameter :: grp_local = "local"
+  character(len=18), parameter :: dset_d = "local/displacement"
+  character(len=18), parameter :: dset_s = "local/strain"
+  character(len=18), parameter :: dset_gll = "gll_weights"
+  character(len=26), parameter :: attr_nbrec_by_proc = &
+                                    "nb_points_per_specfem_proc"
+  character(len=23), parameter :: attr_offset_by_proc = &
+                                    "offset_per_specfem_proc"
+
+  ! Identifiers
+  integer(hid_t) :: write_file_id     ! File identifier
+  integer(hid_t) :: read_file_id     ! File identifier
+  integer(hid_t) :: plist_id          ! Property list identifier
+  integer(hid_t) :: read_grp_id      ! Group identifier
+  integer(hid_t) :: dset_d_id         ! Dataset identifier
+  integer(hid_t) :: dset_s_id         ! Dataset identifier
+  integer(hid_t) :: dspace_d_id       ! Dataspace identifier
+  integer(hid_t) :: dspace_s_id       ! Dataspace identifier
+  integer(hid_t) :: mspace_d_id       ! Memspace identifier
+  integer(hid_t) :: mspace_s_id       ! Memspace identifier
+  integer(hid_t) :: attr_nbrec_by_proc_id    ! Attribite identifier
+  integer(hid_t) :: attr_offset_by_proc_id   ! Attribite identifier
+  integer(hid_t) :: dset_gll_id         ! Dataset identifier
+  integer(hid_t) :: dspace_gll_id       ! Dataspace identifier
+  integer(hid_t) :: mspace_gll_id       ! Memspace identifier
+
+  integer :: error ! Error flag
+
+  integer :: d_rank = 2, s_rank = 2, gll_rank = 1 ! Dataset ranks in memory and file
+
+  integer(hsize_t), dimension(2) :: d_dimsm     ! Dataset:
+  integer(hsize_t), dimension(2) :: s_dimsm     ! - dimensions in memory
+  integer(hsize_t), dimension(1) :: gll_dimsm   ! - dimensions in memory
+  integer(hsize_t), dimension(1) :: gll_dimsf   ! - dimensions in file
+  integer(hsize_t), dimension(3) :: d_countf    ! Hyperslab size in file
+  integer(hsize_t), dimension(3) :: s_countf   ! Hyperslab size in file
+  integer(hsize_t), dimension(1) :: gll_countf    ! Hyperslab size in file
+  integer(hsize_t), dimension(3) :: d_offsetf   ! Hyperslab offset in f
+  integer(hsize_t), dimension(3) :: s_offsetf  ! Hyperslab offset in f
+  integer(hsize_t), dimension(1) :: gll_offsetf  ! Hyperslab offset in f
+  integer(hsize_t), dimension(1) :: attr_nbrec_by_proc_dim   ! Attribute
+                                                             ! dimensions
+  ! Data and attribute buffers
+  real, allocatable :: displ_buf(:, :), strain_buf(:, :), weights_buf(:)
+  integer, allocatable :: nrec_by_proc(:), offset_by_proc(:)
+
+  ! And some helpers
+  integer :: ipoint, nbrec
+
   !! CD modif. : begin (implemented by VM) !! For coupling with DSM
 
   integer :: kaxisem, ip
@@ -139,17 +202,19 @@
         !! MODIFS DE NOBU 2D
       endif
 
-   else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+    else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+            ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+             (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_SOURCE))) then
 
       if (iphase == 1) then
         call read_axisem_file(Veloc_axisem,Tract_axisem,num_abs_boundary_faces*NGLLSQUARE)
 
         !! CD CD add this
         if (RECIPROCITY_AND_KH_INTEGRAL) Tract_axisem_time(:,:,it) = Tract_axisem(:,:)
-     endif
+      endif
 
-  else if ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_FK) then
-     if (iphase == 1) then
+    else if ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_FK) then
+      if (iphase == 1) then
 
         !! find indices
         ii = floor( real(it + NP_RESAMP - 1) / real( NP_RESAMP))
@@ -186,11 +251,9 @@
 
         enddo
         it_fk=it_fk+1
-
-     endif
-  endif
-
-endif
+      endif ! (iphase == 1)
+    endif ! (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM)
+  endif ! (COUPLE_WITH_INJECTION_TECHNIQUE)
 
   ! only add these contributions in first pass
   if (iphase /= 1) return
@@ -199,6 +262,56 @@ endif
   if (num_abs_boundary_faces == 0) return
 
   ! absorbs absorbing-boundary surface using Stacey condition (Clayton and Enquist)
+
+  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
+     (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+     (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER)) then
+
+    !! MPC read off gll_coordinates hdf5 file the offsets & nbpoints per proc
+    allocate(nrec_by_proc(sizeprocs))
+    allocate(offset_by_proc(sizeprocs))
+    !if (myrank == 0) then
+    !  write(*, *) "Opening hdf5 coordinates file and reading attributes..."
+    !  write(*,* ) "Time step of specfem simulation:", it
+    !endif
+    attr_nbrec_by_proc_dim = sizeprocs
+    ! Initialize hdf5 interface
+    call h5open_f(error)
+    ! Open existing hdf5 file
+    call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
+    call h5pset_fapl_mpio(plist_id)
+
+    if (it == 1) then
+      call h5fopen_f(hdf5_file_read, &
+                     H5F_ACC_RDWR_F, read_file_id, error, &
+                     access_prp = plist_id)
+    else
+      call h5fopen_f(hdf5_file_read, &
+                     H5F_ACC_RDONLY_F, read_file_id, error, &
+                     access_prp = plist_id)
+    endif
+
+    call h5pclose_f(plist_id, error)
+    ! Open group to which attributes are attached
+    call h5gopen_f(read_file_id, grp_local, read_grp_id, error)
+    ! Open attributes
+    call h5aopen_f(read_grp_id, attr_nbrec_by_proc, attr_nbrec_by_proc_id, &
+                   error)
+    call h5aopen_f(read_grp_id, attr_offset_by_proc, attr_offset_by_proc_id, &
+                   error)
+    ! Read attribute
+    call h5aread_f(attr_nbrec_by_proc_id, H5T_NATIVE_INTEGER, &
+                   nrec_by_proc, attr_nbrec_by_proc_dim, error)
+    call h5aread_f(attr_offset_by_proc_id, H5T_NATIVE_INTEGER, &
+                   offset_by_proc, attr_nbrec_by_proc_dim, error)
+
+    allocate(displ_buf(3, nrec_by_proc(myrank+1)))
+    allocate(strain_buf(6, nrec_by_proc(myrank+1)))
+    allocate(weights_buf(nrec_by_proc(myrank+1)))
+
+  endif
+
+  ipoint = 0
   do iface = 1,num_abs_boundary_faces
 
     ispec = abs_boundary_ispec(iface)
@@ -227,7 +340,9 @@ endif
               vy = vy - Veloc_dsm_boundary(2,it_dsm,igll,iface)
               vz = vz - Veloc_dsm_boundary(3,it_dsm,igll,iface)
 
-            else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then !! VM VM add AxiSEM
+            else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+                     ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+                     (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_SOURCE))) then !! VM VM add AxiSEM; MPC add Instaseis
                 kaxisem = igll + NGLLSQUARE*(iface - 1)
                 vx = vx - Veloc_axisem(1,kaxisem)
                 vy = vy - Veloc_axisem(2,kaxisem)
@@ -278,14 +393,65 @@ endif
               ty = ty - Tract_dsm_boundary(2,it_dsm,igll,iface)
               tz = tz - Tract_dsm_boundary(3,it_dsm,igll,iface)
 
-            else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+            else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+                    ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+                     (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_SOURCE))) then
                 tx = tx - Tract_axisem(1,kaxisem)
                 ty = ty - Tract_axisem(2,kaxisem)
                 tz = tz - Tract_axisem(3,kaxisem)
             endif
-
           endif
 
+          if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
+             (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+             (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER)) then
+            !! MPC to dump per proc for coupling with Instaseis
+            ipoint = ipoint + 1
+
+            displ_buf(1, ipoint) = displ(1, iglob)
+            displ_buf(2, ipoint) = displ(2, iglob)
+            displ_buf(3, ipoint) = displ(3, iglob)
+            ! debug check for NaN
+            !if (displ_buf(1, ipoint) /= displ_buf(1, ipoint)) then
+            !  write(*, *) "Rank: ", myrank, "displ_buf(1, ipoint) : ", displ_buf(1, ipoint)
+            !endif
+            !if (displ_buf(2, ipoint) /= displ_buf(2, ipoint)) then
+          !    write(*, *) "Rank: ", myrank, "displ_buf(2, ipoint) : ", displ_buf(2, ipoint)
+            !endif
+            !if (displ_buf(3, ipoint) /= displ_buf(3, ipoint)) then
+          !    write(*, *) "Rank: ", myrank, "displ_buf(3, ipoint) : ", displ_buf(3, ipoint)
+            !endif
+            strain_buf(1, ipoint) = epsilondev_xx(i,j,k,ispec) &
+                + (epsilon_trace_new(i,j,k,ispec) / 3._CUSTOM_REAL)
+            strain_buf(2, ipoint) = epsilondev_yy(i,j,k,ispec) &
+                + (epsilon_trace_new(i,j,k,ispec) / 3._CUSTOM_REAL)
+            strain_buf(3, ipoint) = epsilon_trace_new(i,j,k,ispec) &
+                - strain_buf(1, ipoint) &
+                - strain_buf(2, ipoint)
+            strain_buf(4, ipoint) = epsilondev_yz(i,j,k,ispec)
+            strain_buf(5, ipoint) = epsilondev_xz(i,j,k,ispec)
+            strain_buf(6, ipoint) = epsilondev_xy(i,j,k,ispec)
+
+            ! debug check for NaN
+            !if (strain_buf(1, ipoint) /= strain_buf(1, ipoint)) then
+            !  write(*, *) "Rank: ", myrank, "strain_buf(1, ipoint) : ", strain_buf(1, ipoint), ipoint
+            !endif
+            !if (strain_buf(2, ipoint) /= strain_buf(2, ipoint)) then
+            !  write(*, *) "Rank: ", myrank, "strain_buf(2, ipoint) : ", strain_buf(2, ipoint), ipoint
+            !endif
+            !if (strain_buf(3, ipoint) /= strain_buf(3, ipoint)) then
+            !  write(*, *) "Rank: ", myrank, "strain_buf(3, ipoint) : ", strain_buf(3, ipoint), ipoint
+            !endif
+            !if (strain_buf(4, ipoint) /= strain_buf(4, ipoint)) then
+            !  write(*, *) "Rank: ", myrank, "strain_buf(4, ipoint) : ", strain_buf(4, ipoint), ipoint
+            !endif
+            !if (strain_buf(5, ipoint) /= strain_buf(5, ipoint)) then
+            !  write(*, *) "Rank: ", myrank, "strain_buf(5, ipoint) : ", strain_buf(5, ipoint), ipoint
+            !endif
+            !if (strain_buf(6, ipoint) /= strain_buf(6, ipoint)) then
+            !  write(*, *) "Rank: ", myrank, "strain_buf(6, ipoint) : ", strain_buf(6, ipoint), ipoint
+            !endif
+          endif
 ! *********************************************************************************
 ! added by Ping Tong (TP / Tong Ping) for the FK3D calculation
           if (COUPLE_WITH_INJECTION_TECHNIQUE .and. INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_FK) then
@@ -297,7 +463,9 @@ endif
 
         ! gets associated, weighted jacobian
         jacobianw = abs_boundary_jacobian2Dw(igll,iface)
-
+        if (it == 1) then
+          weights_buf(ipoint) = jacobianw
+        endif
         ! adds stacey term (weak form)
         accel(1,iglob) = accel(1,iglob) - tx*jacobianw
         accel(2,iglob) = accel(2,iglob) - ty*jacobianw
@@ -319,6 +487,109 @@ endif
       enddo
     endif ! ispec_is_elastic
   enddo
+
+  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
+     (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+     (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER)) then
+
+    if (it == 1) then
+      !! here we save gll weights!
+      gll_offsetf = (/offset_by_proc(myrank+1)/)
+      gll_countf = (/nrec_by_proc(myrank+1)/)
+      gll_dimsf(1) = sum(nrec_by_proc)
+      gll_dimsm(1) = nrec_by_proc(myrank+1)
+      !Create data space for the dataset, the dims are the entire arrays
+      call h5screate_simple_f(gll_rank, gll_dimsf, dspace_gll_id, error)
+      ! Create dataset with default properties.
+      call h5dcreate_f(read_grp_id, dset_gll, H5T_NATIVE_REAL, &
+                       dspace_gll_id, dset_gll_id, error)
+      call h5sselect_hyperslab_f(dspace_gll_id, H5S_SELECT_SET_F, &
+                                 gll_offsetf, gll_countf, error)
+      ! Create memory dataspace, the dims are the arrays per proc
+      call h5screate_simple_f(gll_rank, gll_dimsm, mspace_gll_id, error)
+      ! Create property list for independent dataset write
+      call h5pcreate_f(H5P_DATASET_XFER_F, plist_id, error)
+      call h5pset_dxpl_mpio(plist_id)
+      ! Write data
+      call h5dwrite_f(dset_gll_id, H5T_NATIVE_REAL, weights_buf, &
+          gll_dimsm, error, mspace_gll_id, dspace_gll_id, &
+          xfer_prp = plist_id)
+      call h5sclose_f(dspace_gll_id, error)
+      call h5sclose_f(mspace_gll_id, error)
+      call h5dclose_f(dset_gll_id, error)
+      call h5pclose_f(plist_id, error)
+    endif  !! it==1
+
+    call h5aclose_f(attr_nbrec_by_proc_id, error)
+    call h5aclose_f(attr_offset_by_proc_id, error)
+    call h5gclose_f(read_grp_id, error)
+    call h5fclose_f(read_file_id, error)
+    call h5close_f(error)
+
+
+    if (myrank == 0) then
+      write(*, *) "Dumping fields to hdf5 file, time step: ", it
+    endif
+
+    !! MPC dump displacement and strain in hdf5
+    ! Initialize hdf5 interface
+    call h5open_f(error)
+    ! Setup file access property list with parallel I/O access.
+    call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
+    call h5pset_fapl_mpio(plist_id)
+    ! Create the file collectively.
+    call h5fopen_f(hdf5_file_write, H5F_ACC_RDWR_F, write_file_id, error, &
+                   access_prp = plist_id)
+    call h5pclose_f(plist_id, error)
+    ! Open existing datasets
+    call h5dopen_f(write_file_id, dset_d, dset_d_id, error)
+    call h5dopen_f(write_file_id, dset_s, dset_s_id, error)
+    nbrec = sum(nrec_by_proc)
+
+    d_offsetf = (/0, it-1, offset_by_proc(myrank+1)/)
+    d_countf = (/3, 1, nrec_by_proc(myrank+1)/)
+    d_dimsm(1) = 3
+    d_dimsm(2) = nrec_by_proc(myrank+1)
+
+    s_offsetf = (/0, it-1, offset_by_proc(myrank+1)/)
+    s_countf = (/6, 1, nrec_by_proc(myrank+1)/)
+    s_dimsm(1) = 6
+    s_dimsm(2) = nrec_by_proc(myrank+1)
+
+    ! Get datasets' dataspace identifiers
+    call h5dget_space_f(dset_d_id, dspace_d_id, error)
+    call h5dget_space_f(dset_s_id, dspace_s_id, error)
+
+    call h5sselect_hyperslab_f(dspace_d_id, H5S_SELECT_SET_F, &
+                               d_offsetf, d_countf, error)
+    call h5sselect_hyperslab_f(dspace_s_id, H5S_SELECT_SET_F, &
+                               s_offsetf, s_countf, error)
+    ! Create memory dataspace, the dims are the arrays per proc
+    call h5screate_simple_f(d_rank, d_dimsm, mspace_d_id, error)
+    call h5screate_simple_f(s_rank, s_dimsm, mspace_s_id, error)
+    ! Create property list for independent dataset write
+    call h5pcreate_f(H5P_DATASET_XFER_F, plist_id, error)
+    call h5pset_dxpl_mpio(plist_id)
+    ! Write data and attributes
+    call h5dwrite_f(dset_d_id, H5T_NATIVE_REAL, displ_buf, &
+        d_dimsm, error, mspace_d_id, dspace_d_id, &
+        xfer_prp = plist_id)
+    call h5dwrite_f(dset_s_id, H5T_NATIVE_REAL, strain_buf, &
+        s_dimsm, error, mspace_s_id, dspace_s_id, &
+        xfer_prp = plist_id)
+    ! Close hdf5 groups, datasets, dataspaces attributes...
+    call h5sclose_f(dspace_d_id, error)
+    call h5sclose_f(dspace_s_id, error)
+    call h5sclose_f(mspace_d_id, error)
+    call h5sclose_f(mspace_s_id, error)
+    call h5dclose_f(dset_d_id, error)
+    call h5dclose_f(dset_s_id, error)
+    call h5pclose_f(plist_id, error)
+    ! Close the file.
+    call h5fclose_f(write_file_id, error)
+    ! Close hdf5 interface
+    call h5close_f(error)
+  endif !! (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)
 
   ! adjoint simulations: stores absorbed wavefield part
   if (SIMULATION_TYPE == 1 .and. SAVE_FORWARD) then
@@ -1487,4 +1758,3 @@ subroutine compute_spline_coef_to_store(Sig, npts, spline_coeff)
   deallocate(c)
 
 end subroutine compute_spline_coef_to_store
-

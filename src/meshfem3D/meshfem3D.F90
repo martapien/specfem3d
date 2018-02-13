@@ -615,7 +615,8 @@
   use constants, only: NGLLX, NGLLY, NGLLZ, NDIM, R_EARTH, PI, ZERO, TINYVAL
 
   use shared_parameters, only: old_DSM_coupling_from_Vadim, INJECTION_TECHNIQUE_IS_AXISEM, &
-                                   INJECTION_TECHNIQUE_IS_DSM,INJECTION_TECHNIQUE_TYPE
+                                   INJECTION_TECHNIQUE_IS_DSM, INJECTION_TECHNIQUE_IS_INSTASEIS, &
+                                   INJECTION_TECHNIQUE_TYPE
 
   implicit none
 
@@ -1074,7 +1075,8 @@
           ! (must be after write_gllz_points to know the value of ilayer)
 
           if ( ( ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM .and. (.not. old_DSM_coupling_from_Vadim) ) .or. &
-                 ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM                                        ) ) .and. &
+                 ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM                                        ) .or. &
+                 ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS                                     )) .and. &
                ( istore_for_new_outputs > 0 ) ) then
 
 
@@ -1330,7 +1332,8 @@
   use constants, only: NGLLX, NGLLY, NGLLZ, NDIM, R_EARTH, PI, ZERO, TINYVAL
 
   use shared_parameters, only: old_DSM_coupling_from_Vadim, INJECTION_TECHNIQUE_IS_AXISEM, &
-                                  INJECTION_TECHNIQUE_IS_DSM,INJECTION_TECHNIQUE_TYPE
+                                  INJECTION_TECHNIQUE_IS_DSM, INJECTION_TECHNIQUE_IS_INSTASEIS, &
+                                  INJECTION_TECHNIQUE_TYPE
 
   implicit none
 
@@ -1874,7 +1877,8 @@
           ! (must be after write_gllz_points to know the value of ilayer)
 
           if ( ( ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM .and. (.not. old_DSM_coupling_from_Vadim) ) .or. &
-                 ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM                                        ) ) .and. &
+                 ( INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM                                        ) .or. &
+                 ( INJECTION_TECHNIQUE_TYPE ==  INJECTION_TECHNIQUE_IS_INSTASEIS                                 ) ) .and. &
                ( istore_for_new_outputs > 0 ) ) then
 
 
@@ -2502,7 +2506,8 @@
 
   use constants, only: NGLLX, NGLLY, NGLLZ
 
-  use shared_parameters, only: INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_DSM, INJECTION_TECHNIQUE_IS_AXISEM
+  use shared_parameters, only: INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_DSM, &
+      INJECTION_TECHNIQUE_IS_AXISEM, INJECTION_TECHNIQUE_IS_INSTASEIS
 
   implicit none
 
@@ -2548,7 +2553,8 @@
           if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM) then
             write(92,1000) xstore(i,j,k), ystore(i,j,k), zstore(i,j,k)
 
-          else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+          else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+                   (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) ) then
             write(92,'(3f25.10,i10,6i3)') xstore(i,j,k),ystore(i,j,k),zstore(i,j,k),ispec,i,j,k,1,ilayer,updown(k)
 
           endif
@@ -2581,7 +2587,8 @@
           if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM) then
             write(92,1000) xstore(i,j,k), ystore(i,j,k), zstore(i,j,k)
 
-          else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+          else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+                   (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)) then
             write(92,'(3f25.10,i10,6i3)') xstore(i,j,k),ystore(i,j,k),zstore(i,j,k),ispec,i,j,k,2,ilayer,updown(k)
 
           endif
@@ -2614,7 +2621,8 @@
           if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM) then
             write(92,1000) xstore(i,j,k), ystore(i,j,k), zstore(i,j,k)
 
-          else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+          else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+                   (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)) then
             write(92,'(3f25.10,i10,6i3)') xstore(i,j,k),ystore(i,j,k),zstore(i,j,k),ispec,i,j,k,3,ilayer,updown(k)
 
           endif
@@ -2647,7 +2655,8 @@
           if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM) then
             write(92,1000) xstore(i,j,k), ystore(i,j,k), zstore(i,j,k)
 
-          else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+          else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+                   (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)) then
             write(92,'(3f25.10,i10,6i3)') xstore(i,j,k),ystore(i,j,k),zstore(i,j,k),ispec,i,j,k,4,ilayer,updown(k)
 
           endif
@@ -2680,7 +2689,8 @@
           if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM) then
             write(92,1000) xstore(i,j,k), ystore(i,j,k), zstore(i,j,k)
 
-          else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+          else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+                   (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)) then
             write(92,'(3f25.10,i10,6i3)') xstore(i,j,k),ystore(i,j,k),zstore(i,j,k),ispec,i,j,k,5,ilayer,updown(k)
 
           endif
@@ -3695,4 +3705,3 @@ subroutine calc_gll_points(xelm,yelm,zelm,xstore,ystore,zstore,shape3D,NGNOD,NGL
   enddo
 
 end subroutine calc_gll_points
-

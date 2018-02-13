@@ -659,7 +659,8 @@
       !! for 2D light version
     endif
 
-  else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+  else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+           (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)) then
 
     call read_axisem_disp_file(num_abs_boundary_faces*NGLLSQUARE)
     call read_specfem_tract_file(NGLLSQUARE*num_abs_boundary_faces)

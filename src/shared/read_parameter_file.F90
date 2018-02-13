@@ -596,6 +596,13 @@
       write(*,*)
     endif
 
+    call read_value_integer(INSTASEIS_INJECTION_BOX_LOCATION,'INSTASEIS_INJECTION_BOX_LOCATION',ier)
+    if (ier /= 0) then
+      some_parameters_missing_from_Par_file = .true.
+      write(*,'(a)') 'INSTASEIS_INJECTION_BOX_LOCATION        = 3'
+      write(*,*)
+    endif
+
     call read_value_logical(MESH_A_CHUNK_OF_THE_EARTH,'MESH_A_CHUNK_OF_THE_EARTH',ier)
     if (ier /= 0) then
       some_parameters_missing_from_Par_file = .true.
@@ -632,7 +639,19 @@
     if (COUPLE_WITH_INJECTION_TECHNIQUE) then
       if (INJECTION_TECHNIQUE_TYPE /= INJECTION_TECHNIQUE_IS_DSM .and. &
          INJECTION_TECHNIQUE_TYPE /= INJECTION_TECHNIQUE_IS_AXISEM .and. &
-         INJECTION_TECHNIQUE_TYPE /= INJECTION_TECHNIQUE_IS_FK) stop 'Error incorrect value of INJECTION_TECHNIQUE_TYPE read'
+         INJECTION_TECHNIQUE_TYPE /= INJECTION_TECHNIQUE_IS_FK .and. &
+         INJECTION_TECHNIQUE_TYPE /= INJECTION_TECHNIQUE_IS_INSTASEIS ) then
+         write(*,*) INJECTION_TECHNIQUE_TYPE
+         write(*, *) INJECTION_TECHNIQUE_IS_INSTASEIS
+         stop 'Error incorrect value of INJECTION_TECHNIQUE_TYPE read'
+      endif
+      if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) then
+        if (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER .and. &
+            INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_SOURCE .and. &
+            INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_DEPTH) then
+              stop 'Error incorrect value of INSTASEIS_INJECTION_BOX_LOCATION read'
+        endif
+      endif
 
       if ( (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM ) .and. &
            (.not. MESH_A_CHUNK_OF_THE_EARTH) ) stop 'Error, coupling with DSM only works with a Earth chunk mesh'
@@ -968,6 +987,7 @@
     call bcast_all_singlel(COUPLE_WITH_INJECTION_TECHNIQUE)
     call bcast_all_singlel(MESH_A_CHUNK_OF_THE_EARTH)
     call bcast_all_singlei(INJECTION_TECHNIQUE_TYPE)
+    call bcast_all_singlei(INSTASEIS_INJECTION_BOX_LOCATION)
     call bcast_all_string(TRACTION_PATH)
     call bcast_all_string(FKMODEL_FILE)
     call bcast_all_singlel(RECIPROCITY_AND_KH_INTEGRAL)
@@ -1149,5 +1169,3 @@
   endif
 
   end subroutine get_number_of_sources
-
-

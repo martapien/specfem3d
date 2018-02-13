@@ -219,7 +219,8 @@
              epsilondev_yy(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
              epsilondev_xy(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
              epsilondev_xz(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
-             epsilondev_yz(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY),stat=ier)
+             epsilondev_yz(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
+             epsilon_trace_new(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), stat=ier)
     if (ier /= 0) stop 'Error allocating array epsilondev_xx etc.'
 
     allocate(R_trace(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB,N_SLS), &
@@ -498,7 +499,9 @@
         !! To verify for NOBU version (normally, remains empty)
       endif
 
-    else if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) then
+    else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_AXISEM) .or. &
+             ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+             (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_SOURCE))) then
 
       allocate(Veloc_axisem(3,NGLLSQUARE*num_abs_boundary_faces))
       allocate(Tract_axisem(3,NGLLSQUARE*num_abs_boundary_faces))
@@ -528,10 +531,15 @@
             status='old',action='read',form='unformatted',iostat=ier)
 
           write(*,*) 'OPENING ', dsmname(1:len_trim(dsmname))//'axisem_displ_for_int_KH, and the specfem disp and tract'
-        endif
+        endif ! (.not. SAVE_RUN_BOUN_FOR_KH_INTEGRAL)
 
-      endif
-
+      endif ! (RECIPROCITY_AND_KH_INTEGRAL)
+    else if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+             (INSTASEIS_INJECTION_BOX_LOCATION == INSTASEIS_INJECTION_BOX_LOCATION_SOURCE)) then
+     allocate(Veloc_dsm_boundary(1,1,1,1))
+     allocate(Tract_dsm_boundary(1,1,1,1))
+     allocate(Veloc_axisem(1,1))
+     allocate(Tract_axisem(1,1))
     endif
 
   else
@@ -1414,4 +1422,3 @@
   if (I_should_read_the_database) close(IIN)
 
   end subroutine read_mesh_for_init
-

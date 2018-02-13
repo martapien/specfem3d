@@ -1664,3 +1664,40 @@ end module my_mpi
 
   end subroutine world_unsplit
 
+  !
+  !-------------------------------------------------------------------------------------------------
+  !
+  subroutine h5pset_fapl_mpio(plist_id)
+
+  use my_mpi
+  use HDF5
+
+  implicit none
+
+  integer(hid_t) :: plist_id          ! Property list identifier
+
+  integer :: ier
+
+  call h5pset_fapl_mpio_f(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL, ier)
+  !call MPI_BCAST(buffer,1,MPI_INTEGER,0,my_local_mpi_comm_world,ier)
+
+  end subroutine h5pset_fapl_mpio
+
+
+  !
+  !-------------------------------------------------------------------------------------------------
+  !
+  subroutine h5pset_dxpl_mpio(plist_id)
+
+  use my_mpi
+  use HDF5
+
+  implicit none
+
+  integer(hid_t) :: plist_id          ! Property list identifier
+
+  integer :: ier
+
+  call h5pset_dxpl_mpio_f(plist_id, H5FD_MPIO_INDEPENDENT_F, ier)
+
+  end subroutine h5pset_dxpl_mpio

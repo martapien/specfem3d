@@ -370,11 +370,16 @@
 !
   subroutine save_arrays_solver_files(nspec,nglob,ibool)
 
-  use generate_databases_par, only: myrank,NGLLX,NGLLY,NGLLZ,NGLLSQUARE,IMAIN,IOUT,FOUR_THIRDS
+  !! MPC for instaseis input
+  use HDF5
+
+  use generate_databases_par, only: myrank, sizeprocs, &
+        NGLLX,NGLLY,NGLLZ,NGLLSQUARE,IMAIN,IOUT,FOUR_THIRDS
 
   use create_regions_mesh_ext_par
 
-  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH
+  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH, &
+    INJECTION_TECHNIQUE_TYPE, INJECTION_TECHNIQUE_IS_INSTASEIS, NSTEP
 
   implicit none
 
@@ -388,10 +393,96 @@
   integer :: ier,i
   integer, dimension(:), allocatable :: iglob_tmp
   integer :: iface, igll,  ispec, iglob, j, k, inum
-  real(kind=CUSTOM_REAL) :: nx,ny,nz
+  ! real(kind=CUSTOM_REAL) :: nx,ny,nz
   character(len=MAX_STRING_LEN) :: filename
 
   logical,parameter :: SAVE_MESH_FILES_ADDITIONAL = .true.
+
+
+  !! MPC HDF5 declarations for Instaseis-Specfem HDF5 dumps
+  ! Names (file and HDF5 objects)
+  character(len=20), parameter :: hdf5_file = "gll_coordinates.hdf5" ! File name
+  character(len=5),  parameter :: grp_local = "local"
+  character(len=18), parameter :: grp_params = "elastic_parameters"
+  character(len=18), parameter :: dset_coords = "coordinates"
+  character(len=18), parameter :: dset_normals = "normals"
+  character(len=24), parameter :: dset_kappa = "kappa"
+  character(len=21), parameter :: dset_mu = "mu"
+  character(len=22), parameter :: dset_rho = "rho"
+  character(len=22), parameter :: attr_nbrec = "nb_points"
+  character(len=26), parameter :: attr_spec = "nb_points_per_specfem_proc"
+  character(len=23), parameter :: attr_spec2 = "offset_per_specfem_proc"
+
+  ! Identifiers
+  integer(hid_t) :: file_id           ! File identifier
+  integer(hid_t) :: plist_id          ! Property list identifier
+  integer(hid_t) :: grp_local_id      ! Group identifier
+  integer(hid_t) :: grp_params_id     ! Group identifier
+  integer(hid_t) :: dset_coords_id    ! Dataset identifier
+  integer(hid_t) :: dset_normals_id   ! Dataset identifier
+  integer(hid_t) :: dset_kappa_id     ! Dataset identifier
+  integer(hid_t) :: dset_mu_id        ! Dataset identifier
+  integer(hid_t) :: dset_rho_id       ! Dataset identifier
+  integer(hid_t) :: dspace_coords_id  ! Dataspace identifier
+  integer(hid_t) :: dspace_normals_id ! Dataspace identifier
+  integer(hid_t) :: dspace_kappa_id   ! Dataspace identifier
+  integer(hid_t) :: dspace_mu_id      ! Dataspace identifier
+  integer(hid_t) :: dspace_rho_id     ! Dataspace identifier
+  integer(hid_t) :: mspace_coords_id  ! Memspace identifier
+  integer(hid_t) :: mspace_normals_id ! Memspace identifier
+  integer(hid_t) :: mspace_kappa_id   ! Memspace identifier
+  integer(hid_t) :: mspace_mu_id      ! Memspace identifier
+  integer(hid_t) :: mspace_rho_id     ! Memspace identifier
+  integer(hid_t) :: attr_nbrec_id     ! Attribute identifier
+  integer(hid_t) :: attr_spec_id      ! Attribute identifier
+  integer(hid_t) :: attr_spec2_id      ! Attribute identifier
+  integer(hid_t) :: aspace_nbrec_id   ! Attribute dataspace identifier
+  integer(hid_t) :: aspace_spec_id    ! Attribute dataspace identifier
+  integer(hid_t) :: aspace_spec2_id    ! Attribute dataspace identifier
+
+  integer :: error ! Error flag
+
+  integer :: coords_rank = 2, params_rank = 1       ! Dataset ranks
+                                                    ! in memory and file
+  integer :: nbrec_rank = 1, spec_rank = 1          ! Attribure rank
+  integer(hsize_t), dimension(2) :: coords_dimsf    ! Dataset
+  integer(hsize_t), dimension(2) :: params_dimsf    ! dimensions in file
+  integer(hsize_t), dimension(2) :: coords_dimsm    ! Dataset
+  integer(hsize_t), dimension(2) :: params_dimsm    ! dimensions in memory
+  integer(hsize_t), dimension(1) :: nbrec_dims      ! Attribute dimension
+  integer(hsize_t), dimension(1) :: spec_dims      ! Attribute dimension
+  integer(hsize_t), dimension(2) :: coords_countf   ! Hyperslab size in file
+  integer(hsize_t), dimension(1) :: params_countf   ! Hyperslab size in file
+  integer(hsize_t), dimension(2) :: coords_offsetf  ! Hyperslab offset in f
+  integer(hsize_t), dimension(1) :: params_offsetf  ! Hyperslab offset in f
+
+  ! Data and attribute buffers
+  real, allocatable :: coords_buf(:, :), normals_buf(:, :), &
+                       kappa_buf(:), mu_buf(:), rho_buf(:)
+  integer :: nbrec, ntime
+
+  ! And some helpers
+  integer, allocatable :: offset_per_proc(:), nb_gll_per_proc(:)
+  integer :: nb_gll_myrank, ipoint
+
+  !! HDF5 declarations for specfem_dump file
+  ! Names (file and HDF5 objects)
+  character(len=17), parameter :: spec_file = "specfem_dump.hdf5"
+  character(len=5),  parameter :: grp_coords = "local"
+  character(len=19), parameter :: dset_spec_d = "displacement"
+  character(len=12), parameter :: dset_spec_s = "strain"
+
+  ! Identifiers
+  integer(hid_t) :: spec_file_id           ! File identifier
+  integer(hid_t) :: spec_grp_id            ! Group identifier
+  integer(hid_t) :: dset_spec_d_id  ! Dataset identifier
+  integer(hid_t) :: dset_spec_s_id  ! Dataset identifier
+  integer(hid_t) :: dspace_spec_d_id     ! Dataspace identifier
+  integer(hid_t) :: dspace_spec_s_id     ! Dataspace identifier
+
+  integer(hsize_t), dimension(3) :: d_dimsf, s_dimsf       ! Dataset dimensions
+  integer :: v_rank = 3, s_rank = 3           ! Dataset rank
+
 
   if (myrank == 0) then
     write(IMAIN,*) '     saving mesh files for AVS, OpenDX, Paraview'
@@ -682,12 +773,56 @@
     write(IOUT) ispec_is_elastic
     close(IOUT)
 
+    !! MPC GLL points in local coordinates,kappa, mu and rho
+
+    nb_gll_myrank = 0
+    do iface = 1,num_abs_boundary_faces
+       ispec = abs_boundary_ispec(iface)
+       if (ispec_is_elastic(ispec)) then
+          do igll = 1,NGLLSQUARE
+             nb_gll_myrank = nb_gll_myrank + 1
+          enddo
+       endif
+    enddo
+
+    allocate(nb_gll_per_proc(sizeprocs))
+    allocate(offset_per_proc(sizeprocs))
+
+    call synchronize_all()
+
+    if (myrank > 0) then
+      call send_i_t(nb_gll_myrank,1,0)
+    else
+      nb_gll_per_proc(1) = nb_gll_myrank
+      do i=2, sizeprocs
+        call recv_i_t(nb_gll_per_proc(i),1,i-1)
+      enddo
+
+      offset_per_proc(1) = 0
+      do i=2, sizeprocs
+        offset_per_proc(i) = sum(nb_gll_per_proc(1:i-1))
+      enddo
+    endif  !! myrank > 0
+    call bcast_all_i(nb_gll_per_proc, sizeprocs)
+    call bcast_all_i(offset_per_proc, sizeprocs)
+
+
+    call synchronize_all()
+
+    allocate(coords_buf(3, nb_gll_per_proc(myrank+1)))
+    allocate(normals_buf(3, nb_gll_per_proc(myrank+1)))
+    allocate(kappa_buf(nb_gll_per_proc(myrank+1)))
+    allocate(mu_buf(nb_gll_per_proc(myrank+1)))
+    allocate(rho_buf(nb_gll_per_proc(myrank+1)))
+
     !! VM VM write an ascii file for instaseis input
     filename = prname(1:len_trim(prname))//'normal.txt'
     open(IOUT,file=filename(1:len_trim(filename)),status='unknown',iostat=ier)
     write(IOUT, *) ' number of points :', num_abs_boundary_faces*NGLLSQUARE
 
-    do iface = 1,num_abs_boundary_faces
+
+    ipoint = 0
+    do iface = 1, num_abs_boundary_faces
        ispec = abs_boundary_ispec(iface)
        if (ispec_is_elastic(ispec)) then
           do igll = 1,NGLLSQUARE
@@ -696,20 +831,200 @@
              i = abs_boundary_ijk(1,igll,iface)
              j = abs_boundary_ijk(2,igll,iface)
              k = abs_boundary_ijk(3,igll,iface)
-
              iglob = ibool(i,j,k,ispec)
+             ipoint = ipoint + 1
 
-             nx = abs_boundary_normal(1,igll,iface)
-             ny = abs_boundary_normal(2,igll,iface)
-             nz = abs_boundary_normal(3,igll,iface)
+             coords_buf(1, ipoint) = xstore_dummy(iglob)
+             coords_buf(2, ipoint) = ystore_dummy(iglob)
+             coords_buf(3, ipoint) = zstore_dummy(iglob)
 
-             write(IOUT,'(6f25.10)') xstore_dummy(iglob), ystore_dummy(iglob), zstore_dummy(iglob), nx, ny, nz
+             normals_buf(1, ipoint) = abs_boundary_normal(1,igll,iface)
+             normals_buf(2, ipoint) = abs_boundary_normal(2,igll,iface)
+             normals_buf(3, ipoint) = abs_boundary_normal(3,igll,iface)
+
+             write(IOUT,'(6f25.10)') xstore_dummy(iglob), ystore_dummy(iglob), &
+                zstore_dummy(iglob), normals_buf(1, ipoint), &
+                normals_buf(2, ipoint), normals_buf(3, ipoint)
+             kappa_buf(ipoint) = kappastore(i,j,k,ispec)
+             mu_buf(ipoint) = mustore(i,j,k,ispec)
+             rho_buf(ipoint) = rhostore(i,j,k,ispec)
 
           enddo
        endif
     enddo
+
     close(IOUT)
-  endif ! of if (COUPLE_WITH_INJECTION_TECHNIQUE .or. MESH_A_CHUNK_OF_THE_EARTH)
+    nbrec = sum(nb_gll_per_proc)
+    ! dimensions for hdf5
+    coords_dimsf(1) = 3
+    coords_dimsf(2) = nbrec
+    params_dimsf(1) = nbrec
+    coords_dimsm(1) = 3
+    coords_dimsm(2) = nb_gll_per_proc(myrank+1)
+    params_dimsm(1) = nb_gll_per_proc(myrank+1)
+    nbrec_dims = (/1/)
+    spec_dims = (/sizeprocs/)
+    coords_countf = (/3, nb_gll_per_proc(myrank+1)/)
+    params_countf = (/nb_gll_per_proc(myrank+1)/)
+    coords_offsetf = (/0, offset_per_proc(myrank+1)/)
+    params_offsetf = (/offset_per_proc(myrank+1)/)
+
+
+    call synchronize_all()
+    if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) then
+      !! MPC write a hdf5 file for Instaseis input
+      ! Initialize hdf5 interface
+      call h5open_f(error)
+
+      ! Setup file access property list with parallel I/O access.
+      call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
+      call h5pset_fapl_mpio(plist_id)
+
+      ! Open the file collectively.
+      call h5fopen_f(hdf5_file, H5F_ACC_RDWR_F, file_id, error, &
+                    access_prp = plist_id)
+      call h5pclose_f(plist_id, error)
+
+      ! Open existing group
+      call h5gopen_f(file_id, grp_local, grp_local_id, error)
+      ! Create new group
+      call h5gcreate_f(file_id, grp_params, grp_params_id, error)
+
+      ! Create data spaces for the datasets, the dims are the entire arrays
+      call h5screate_simple_f(coords_rank, coords_dimsf, dspace_coords_id, error)
+      call h5screate_simple_f(coords_rank, coords_dimsf, dspace_normals_id, error)
+      call h5screate_simple_f(params_rank, params_dimsf, dspace_kappa_id, error)
+      call h5screate_simple_f(params_rank, params_dimsf, dspace_mu_id, error)
+      call h5screate_simple_f(params_rank, params_dimsf, dspace_rho_id, error)
+      call h5screate_simple_f(nbrec_rank, nbrec_dims, aspace_nbrec_id, error)
+      call h5screate_simple_f(spec_rank, spec_dims, aspace_spec_id, error)
+      call h5screate_simple_f(spec_rank, spec_dims, aspace_spec2_id, error)
+
+      ! Create datasets with default properties.
+      call h5dcreate_f(grp_local_id, dset_coords, H5T_NATIVE_REAL, &
+                       dspace_coords_id, dset_coords_id, error)
+      call h5dcreate_f(grp_local_id, dset_normals, H5T_NATIVE_REAL, &
+                       dspace_normals_id, dset_normals_id, error)
+      call h5dcreate_f(grp_params_id, dset_kappa, H5T_NATIVE_REAL, &
+                       dspace_kappa_id, dset_kappa_id, error)
+      call h5dcreate_f(grp_params_id, dset_mu, H5T_NATIVE_REAL, &
+                       dspace_mu_id, dset_mu_id, error)
+      call h5dcreate_f(grp_params_id, dset_rho, H5T_NATIVE_REAL, &
+                       dspace_rho_id, dset_rho_id, error)
+      call h5acreate_f(grp_local_id, attr_nbrec, H5T_NATIVE_INTEGER, &
+                       aspace_nbrec_id, attr_nbrec_id, error)
+      call h5acreate_f(grp_local_id, attr_spec, H5T_NATIVE_INTEGER, &
+                      aspace_spec_id, attr_spec_id, error)
+      call h5acreate_f(grp_local_id, attr_spec2, H5T_NATIVE_INTEGER, &
+                      aspace_spec2_id, attr_spec2_id, error)
+
+      call h5sselect_hyperslab_f(dspace_coords_id, H5S_SELECT_SET_F, &
+                                 coords_offsetf, coords_countf, error)
+      call h5sselect_hyperslab_f(dspace_normals_id, H5S_SELECT_SET_F, &
+                                 coords_offsetf, coords_countf, error)
+      call h5sselect_hyperslab_f(dspace_kappa_id, H5S_SELECT_SET_F, &
+                                 params_offsetf, params_countf, error)
+      call h5sselect_hyperslab_f(dspace_mu_id, H5S_SELECT_SET_F, &
+                                 params_offsetf, params_countf, error)
+      call h5sselect_hyperslab_f(dspace_rho_id, H5S_SELECT_SET_F, &
+                                 params_offsetf, params_countf, error)
+
+      ! Create memory dataspace, the dims are the arrays per proc
+      call h5screate_simple_f(coords_rank, coords_dimsm, mspace_coords_id, error)
+      call h5screate_simple_f(coords_rank, coords_dimsm, mspace_normals_id, error)
+      call h5screate_simple_f(params_rank, params_dimsm, mspace_kappa_id, error)
+      call h5screate_simple_f(params_rank, params_dimsm, mspace_mu_id, error)
+      call h5screate_simple_f(params_rank, params_dimsm, mspace_rho_id, error)
+
+      ! Create property list for independent dataset write
+      call h5pcreate_f(H5P_DATASET_XFER_F, plist_id, error)
+      call h5pset_dxpl_mpio(plist_id)
+
+      ! Write data and attributes
+      call h5dwrite_f(dset_coords_id, H5T_NATIVE_REAL, coords_buf, &
+          coords_dimsm, error, mspace_coords_id, dspace_coords_id, &
+          xfer_prp = plist_id)
+      call h5dwrite_f(dset_normals_id, H5T_NATIVE_REAL, normals_buf, &
+          coords_dimsm, error, mspace_normals_id, dspace_normals_id, &
+          xfer_prp = plist_id)
+      call h5dwrite_f(dset_kappa_id, H5T_NATIVE_REAL, kappa_buf, params_dimsm, &
+          error, mspace_kappa_id, dspace_kappa_id, xfer_prp = plist_id)
+      call h5dwrite_f(dset_mu_id, H5T_NATIVE_REAL, mu_buf, params_dimsm, &
+          error, mspace_mu_id, dspace_mu_id, xfer_prp = plist_id)
+      call h5dwrite_f(dset_rho_id, H5T_NATIVE_REAL, rho_buf, params_dimsm, &
+          error, mspace_rho_id, dspace_rho_id, xfer_prp = plist_id)
+      call h5awrite_f(attr_nbrec_id, H5T_NATIVE_INTEGER, nbrec, nbrec_dims, error)
+      call h5awrite_f(attr_spec_id, H5T_NATIVE_INTEGER, nb_gll_per_proc, &
+                      spec_dims, error)
+      call h5awrite_f(attr_spec2_id, H5T_NATIVE_INTEGER, offset_per_proc, &
+                      spec_dims, error)
+
+      ! Close hdf5 groups, datasets, dataspaces attributes...
+      call h5sclose_f(dspace_coords_id, error)
+      call h5sclose_f(dspace_normals_id, error)
+      call h5sclose_f(dspace_kappa_id, error)
+      call h5sclose_f(dspace_mu_id, error)
+      call h5sclose_f(dspace_rho_id, error)
+      call h5sclose_f(mspace_coords_id, error)
+      call h5sclose_f(mspace_normals_id, error)
+      call h5sclose_f(mspace_kappa_id, error)
+      call h5sclose_f(mspace_mu_id, error)
+      call h5sclose_f(mspace_rho_id, error)
+      call h5sclose_f(aspace_nbrec_id, error)
+      call h5sclose_f(aspace_spec_id, error)
+      call h5sclose_f(aspace_spec2_id, error)
+      call h5dclose_f(dset_coords_id, error)
+      call h5dclose_f(dset_normals_id, error)
+      call h5dclose_f(dset_kappa_id, error)
+      call h5dclose_f(dset_mu_id, error)
+      call h5dclose_f(dset_rho_id, error)
+      call h5aclose_f(attr_nbrec_id, error)
+      call h5aclose_f(attr_spec_id, error)
+      call h5aclose_f(attr_spec2_id, error)
+      call h5gclose_f(grp_local_id, error)
+      call h5gclose_f(grp_params_id, error)
+      call h5pclose_f(plist_id, error)
+      ! Close the file.
+      call h5fclose_f(file_id, error)
+
+      ntime = NSTEP
+
+      !! MPC Create a file that is later going to be filled out by specfem
+      call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
+      call h5pset_fapl_mpio(plist_id)
+      ! Create the file collectively.
+      call h5fcreate_f(spec_file, H5F_ACC_TRUNC_F, spec_file_id, error, &
+                       access_prp = plist_id)
+
+      call h5pclose_f(plist_id, error)
+      ! Create new group
+      call h5gcreate_f(spec_file_id, grp_coords, spec_grp_id, error)
+
+      d_dimsf(1) = 3
+      d_dimsf(2) = ntime
+      d_dimsf(3) = nbrec
+      s_dimsf(1) = 6
+      s_dimsf(2) = ntime
+      s_dimsf(3) = nbrec
+
+      ! Create data spaces for the datasets, the dims are the entire arrays
+      call h5screate_simple_f(v_rank, d_dimsf, dspace_spec_d_id, error)
+      call h5screate_simple_f(s_rank, s_dimsf, dspace_spec_s_id, error)
+      ! Create datasets with default properties.
+      call h5dcreate_f(spec_grp_id, dset_spec_d, H5T_NATIVE_REAL, &
+                       dspace_spec_d_id, dset_spec_d_id, error)
+      call h5dcreate_f(spec_grp_id, dset_spec_s, H5T_NATIVE_REAL, &
+                       dspace_spec_s_id, dset_spec_s_id, error)
+
+      call h5dclose_f(dset_spec_d_id, error)
+      call h5dclose_f(dset_spec_s_id, error)
+      call h5gclose_f(spec_grp_id, error)
+      ! Close the file.
+      call h5fclose_f(spec_file_id, error)
+
+      ! Close hdf5 interface
+      call h5close_f(error)
+    endif ! (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)
+  endif ! (COUPLE_WITH_INJECTION_TECHNIQUE .or. MESH_A_CHUNK_OF_THE_EARTH)
 
   end subroutine save_arrays_solver_files
-

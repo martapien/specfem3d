@@ -76,7 +76,7 @@ subroutine compute_forces_viscoelastic_calling()
                         NSPEC_ATTENUATION_AB_LDDRK,R_trace_lddrk, &
                         R_xx_lddrk,R_yy_lddrk,R_xy_lddrk,R_xz_lddrk,R_yz_lddrk, &
                         epsilondev_trace,epsilondev_xx,epsilondev_yy,epsilondev_xy, &
-                        epsilondev_xz,epsilondev_yz,epsilon_trace_over_3, &
+                        epsilondev_xz,epsilondev_yz,epsilon_trace_over_3, epsilon_trace_new, &
                         ANISOTROPY,NSPEC_ANISO, &
                         c11store,c12store,c13store,c14store,c15store,c16store, &
                         c22store,c23store,c24store,c25store,c26store,c33store, &
@@ -662,4 +662,3 @@ subroutine compute_forces_viscoelastic_GPU_calling()
   endif
 
 end subroutine compute_forces_viscoelastic_GPU_calling
-

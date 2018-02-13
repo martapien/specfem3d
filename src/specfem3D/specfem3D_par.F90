@@ -296,6 +296,8 @@ module specfem_par_elastic
   real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: &
     epsilondev_trace,epsilondev_xx,epsilondev_yy,epsilondev_xy,epsilondev_xz,epsilondev_yz
   real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: epsilon_trace_over_3
+  real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: epsilon_trace_new
+
 
 ! displacement, velocity, acceleration
   real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: displ,veloc,accel

@@ -586,6 +586,7 @@
     epsilondev_xy(:,:,:,:) = 0._CUSTOM_REAL
     epsilondev_xz(:,:,:,:) = 0._CUSTOM_REAL
     epsilondev_yz(:,:,:,:) = 0._CUSTOM_REAL
+    epsilon_trace_new(:,:,:,:) = 0._CUSTOM_REAL
 
     R_trace(:,:,:,:,:) = 0._CUSTOM_REAL
     R_xx(:,:,:,:,:) = 0._CUSTOM_REAL
@@ -1580,7 +1581,7 @@
       endif
       if (COMPUTE_AND_STORE_STRAIN) then
         ! d_epsilondev_xx,..
-        memory_size = memory_size + 5.d0 * NGLL3 * NSPEC_AB * dble(CUSTOM_REAL)
+        memory_size = memory_size + 6.d0 * NGLL3 * NSPEC_AB * dble(CUSTOM_REAL)
       endif
       if (ATTENUATION) then
         ! d_R_xx,..
@@ -2059,4 +2060,3 @@
   endif
 
   end subroutine compute_gravity_integrals
-

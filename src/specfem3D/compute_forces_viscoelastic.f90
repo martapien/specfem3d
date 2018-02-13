@@ -41,7 +41,7 @@ subroutine compute_forces_viscoelastic(iphase, &
                         NSPEC_ATTENUATION_AB_LDDRK,R_trace_lddrk, &
                         R_xx_lddrk,R_yy_lddrk,R_xy_lddrk,R_xz_lddrk,R_yz_lddrk, &
                         epsilondev_trace,epsilondev_xx,epsilondev_yy,epsilondev_xy, &
-                        epsilondev_xz,epsilondev_yz,epsilon_trace_over_3, &
+                        epsilondev_xz,epsilondev_yz,epsilon_trace_over_3, epsilon_trace_new,&
                         ANISOTROPY,NSPEC_ANISO, &
                         c11store,c12store,c13store,c14store,c15store,c16store, &
                         c22store,c23store,c24store,c25store,c26store,c33store, &
@@ -78,6 +78,9 @@ subroutine compute_forces_viscoelastic(iphase, &
                      rmemory_duz_dxl_z,rmemory_duz_dyl_z,rmemory_duy_dzl_z,rmemory_dux_dzl_z, &
                      rmemory_displ_elastic,PML_displ_old,PML_displ_new
 
+  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, &
+      INJECTION_TECHNIQUE_TYPE, INSTASEIS_INJECTION_BOX_LOCATION, &
+      INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER, INJECTION_TECHNIQUE_IS_INSTASEIS
   implicit none
 
   integer :: NSPEC_AB,NGLOB_AB
@@ -106,6 +109,10 @@ subroutine compute_forces_viscoelastic(iphase, &
 ! memory variables and standard linear solids for attenuation
   logical :: ATTENUATION
   logical :: COMPUTE_AND_STORE_STRAIN
+  !logical :: COUPLE_WITH_INJECTION_TECHNIQUE, INJECTION_TECHNIQUE_TYPE, &
+  !  INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INJECTION_BOX_LOCATION, &
+  !  INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER
+
   integer :: NSPEC_STRAIN_ONLY, NSPEC_ADJOINT
   integer :: NSPEC_ATTENUATION_AB
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB) :: one_minus_sum_beta
@@ -118,7 +125,7 @@ subroutine compute_forces_viscoelastic(iphase, &
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB,N_SLS) :: R_trace
 
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY) :: &
-            epsilondev_xx,epsilondev_yy,epsilondev_xy,epsilondev_xz,epsilondev_yz
+            epsilondev_xx,epsilondev_yy,epsilondev_xy,epsilondev_xz,epsilondev_yz, epsilon_trace_new
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB) :: epsilondev_trace
   real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ADJOINT) :: epsilon_trace_over_3
 
@@ -443,6 +450,14 @@ subroutine compute_forces_viscoelastic(iphase, &
               if (COMPUTE_AND_STORE_STRAIN) then
                 templ = ONE_THIRD * (duxdxl + duydyl + duzdzl)
                 if (SIMULATION_TYPE == 3) epsilon_trace_over_3(i,j,k,ispec) = templ
+                if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
+                   (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+                   (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER)) then
+                   epsilon_trace_new(i,j,k,ispec) = templ * 3._CUSTOM_REAL
+                endif
+                if (epsilon_trace_new(i,j,k,ispec) /= epsilon_trace_new(i,j,k, ispec)) then
+                  write(*, *) "1111 epsilon_trace_new(i,j,k, ispec)", epsilon_trace_new(i,j,k, ispec), i, j, k, ispec
+                endif
                 epsilondev_trace_loc(i,j,k) = 3._CUSTOM_REAL * templ
                 epsilondev_xx_loc(i,j,k) = duxdxl - templ
                 epsilondev_yy_loc(i,j,k) = duydyl - templ
@@ -510,6 +525,14 @@ subroutine compute_forces_viscoelastic(iphase, &
                 ! compute deviatoric strain
                 templ = ONE_THIRD * (duxdxl_att + duydyl_att + duzdzl_att)
                 if (SIMULATION_TYPE == 3) epsilon_trace_over_3(i,j,k,ispec) = templ
+                if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
+                   (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+                   (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER)) then
+                   epsilon_trace_new(i,j,k,ispec) = templ * 3._CUSTOM_REAL
+                endif
+                if (epsilon_trace_new(i,j,k,ispec) /= epsilon_trace_new(i,j,k, ispec)) then
+                  write(*, *) "2222 epsilon_trace_new(i,j,k, ispec)", epsilon_trace_new(i,j,k, ispec), i, j, k, ispec
+                endif
                 epsilondev_trace_loc(i,j,k) = 3._CUSTOM_REAL * templ
                 epsilondev_xx_loc(i,j,k) = duxdxl_att - templ
                 epsilondev_yy_loc(i,j,k) = duydyl_att - templ
@@ -523,6 +546,14 @@ subroutine compute_forces_viscoelastic(iphase, &
             if (COMPUTE_AND_STORE_STRAIN) then
               templ = ONE_THIRD * (duxdxl + duydyl + duzdzl)
               if (SIMULATION_TYPE == 3) epsilon_trace_over_3(i,j,k,ispec) = templ
+              if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
+                 (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+                 (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER)) then
+                epsilon_trace_new(i,j,k,ispec) = templ * 3._CUSTOM_REAL
+              endif
+              if (epsilon_trace_new(i,j,k,ispec) /= epsilon_trace_new(i,j,k, ispec)) then
+                write(*, *) "3333 epsilon_trace_new(i,j,k, ispec)", epsilon_trace_new(i,j,k, ispec), i, j, k, ispec
+              endif
               epsilondev_trace_loc(i,j,k) = 3._CUSTOM_REAL * templ
               epsilondev_xx_loc(i,j,k) = duxdxl - templ
               epsilondev_yy_loc(i,j,k) = duydyl - templ
@@ -879,4 +910,3 @@ subroutine compute_strain_in_element(tempx1_att,tempx2_att,tempx3_att,tempx1,tem
   enddo
 
 end subroutine compute_strain_in_element
-

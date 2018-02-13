@@ -128,7 +128,7 @@
 
 ! for coupling with EXTERNAL CODE !! CD CD modify here
   if (COUPLE_WITH_INJECTION_TECHNIQUE .or. SAVE_RUN_BOUN_FOR_KH_INTEGRAL) then
-     call create_name_database(dsmname,myrank,TRACTION_PATH)
+     call create_name_database(dsmname,myrank,TRACTION_PATH)  !!! MPC TO CHECK
   endif
 
   if (myrank == 0) then
@@ -159,6 +159,11 @@
 
   ! needed for attenuation and/or kernel computations
   if (ATTENUATION .or. SIMULATION_TYPE == 3) then
+    COMPUTE_AND_STORE_STRAIN = .true.
+    NSPEC_STRAIN_ONLY = NSPEC_AB
+  else if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
+          (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+          (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER)) then
     COMPUTE_AND_STORE_STRAIN = .true.
     NSPEC_STRAIN_ONLY = NSPEC_AB
   else

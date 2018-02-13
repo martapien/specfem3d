@@ -43,7 +43,9 @@
 
   use specfem_par_elastic, only: accel,ispec_is_elastic
 
-  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE
+  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, &
+        INJECTION_TECHNIQUE_TYPE, INSTASEIS_INJECTION_BOX_LOCATION, &
+        INSTASEIS_INJECTION_BOX_LOCATION_SOURCE, INJECTION_TECHNIQUE_IS_INSTASEIS
 
   implicit none
 
@@ -58,7 +60,14 @@
 
 ! no source inside the mesh if we are coupling with DSM
 ! because the source is precisely the wavefield coming from the DSM traction file
-  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. SIMULATION_TYPE == 1) return
+  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. (SIMULATION_TYPE == 1) .and. &
+      (INJECTION_TECHNIQUE_TYPE /= INJECTION_TECHNIQUE_IS_INSTASEIS) ) return
+
+!! MPC the instaseis coupling allows for a source inside of the local mesh
+!! we can choose box around the source
+  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. (SIMULATION_TYPE == 1) .and. &
+      (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+      (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_SOURCE)) return
 
   ! forward simulations
   if (SIMULATION_TYPE == 1 .and. NOISE_TOMOGRAPHY == 0 .and. nsources_local > 0) then
@@ -619,4 +628,3 @@
   get_stf_viscoelastic = stf
 
   end function get_stf_viscoelastic
-
