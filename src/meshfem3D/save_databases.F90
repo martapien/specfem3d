@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -423,12 +423,10 @@
                                      ibelm_xmin,ibelm_xmax,ibelm_ymin,ibelm_ymax,ibelm_bottom,ibelm_top, &
                                      xgrid,ygrid,zgrid)
 
-  use constants, only: MAX_STRING_LEN,IDOMAIN_ACOUSTIC,IDOMAIN_ELASTIC, NGLLX, NGLLY, NGLLZ, NDIM, ZERO
+  use constants, only: MAX_STRING_LEN,IDOMAIN_ACOUSTIC,IDOMAIN_ELASTIC, NGLLX, NGLLY, NGLLZ, NDIM, ZERO, &
+    INJECTION_TECHNIQUE_IS_AXISEM ! ToDo CHECK
 
-  use shared_parameters, only: NGNOD,COUPLE_WITH_INJECTION_TECHNIQUE, &
-    INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_AXISEM, INJECTION_TECHNIQUE_IS_INSTASEIS
-
-  use HDF5
+  use shared_parameters, only: NGNOD,COUPLE_WITH_INJECTION_TECHNIQUE,INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_AXISEM
 
     implicit none
 
@@ -1115,3 +1113,4 @@
     endif
 
   end subroutine save_output_mesh_files_as_cubit
+

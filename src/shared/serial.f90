@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -363,6 +363,24 @@
 !----
 !
 
+  subroutine gather_all_all_i(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
+
+
+
+    implicit none
+
+    integer :: sendcnt, recvcount, NPROC
+    integer, dimension(sendcnt) :: sendbuf
+    integer, dimension(recvcount,0:NPROC-1) :: recvbuf
+
+    recvbuf(:,0) = sendbuf(:)
+
+  end subroutine gather_all_all_i
+
+!
+!----
+!
+
   subroutine gather_all_dp(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
 
   implicit none
@@ -410,6 +428,28 @@
   recvbuf(:,0) = sendbuf(:)
 
   end subroutine gather_all_all_cr
+
+!
+!----
+!
+
+  subroutine gatherv_all_i(sendbuf, sendcnt, recvbuf, recvcount, recvoffset,recvcounttot, NPROC)
+
+  implicit none
+
+  integer :: sendcnt,recvcounttot,NPROC
+  integer, dimension(NPROC) :: recvcount,recvoffset
+  integer, dimension(sendcnt) :: sendbuf
+  integer, dimension(recvcounttot) :: recvbuf
+
+  integer(kind=4) :: unused_i4
+
+  recvbuf(:) = sendbuf(:)
+
+  unused_i4 = recvcount(1)
+  unused_i4 = recvoffset(1)
+
+  end subroutine gatherv_all_i
 
 !
 !----
@@ -1121,7 +1161,7 @@
   end subroutine world_unsplit
 
 !
-!
+!----
 !
 
   subroutine bcast_all_l_array(buffer, countval)
@@ -1137,18 +1177,3 @@
 
   end subroutine bcast_all_l_array
 
-  subroutine all_gather_all_i(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
-
-
-
-    implicit none
-
-    integer :: sendcnt, recvcount, NPROC
-    integer, dimension(sendcnt) :: sendbuf
-    integer, dimension(recvcount,0:NPROC-1) :: recvbuf
-
-    recvbuf(:,0) = sendbuf(:)
-
-
-
-  end subroutine all_gather_all_i

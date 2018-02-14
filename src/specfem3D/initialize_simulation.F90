@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -92,6 +92,7 @@
                    tiny(1._CUSTOM_REAL),huge(1._CUSTOM_REAL)
     write(IMAIN,*)
     write(IMAIN,'(a)',advance='no') ' velocity model: '
+
     select case (IMODEL)
     case (IMODEL_DEFAULT)
     write(IMAIN,'(a)',advance='yes') '  default '
@@ -113,6 +114,10 @@
     write(IMAIN,'(a)',advance='yes') '  ipati'
     case (IMODEL_IPATI_WATER)
     write(IMAIN,'(a)',advance='yes') '  ipati_water'
+    case (IMODEL_SEP)
+    write(IMAIN,'(a)',advance='yes') '  SEP'
+    case (IMODEL_COUPLED)
+    write(IMAIN,'(a)',advance='yes') '  model coupled with injection method'
     end select
 
     write(IMAIN,*)
@@ -128,18 +133,18 @@
 
 ! for coupling with EXTERNAL CODE !! CD CD modify here
   if (COUPLE_WITH_INJECTION_TECHNIQUE .or. SAVE_RUN_BOUN_FOR_KH_INTEGRAL) then
-     call create_name_database(dsmname,myrank,TRACTION_PATH)  !!! MPC TO CHECK
-  endif
+     call create_name_database(dsmname,myrank,TRACTION_PATH) !!! MPC to check
 
-  if (myrank == 0) then
-     write(IMAIN,*)
-     write(IMAIN,*) '**********************************************'
-     write(IMAIN,*) '      **** USING HYBRID METHOD  ****'
-     write(IMAIN,*) '**********************************************'
-     write(IMAIN,*)
-     write(IMAIN,*) ' create name database ',COUPLE_WITH_INJECTION_TECHNIQUE
-     write(IMAIN,*)
-     write(IMAIN,*) '**********************************************'
+    if (myrank == 0) then
+       write(IMAIN,*)
+       write(IMAIN,*) '**********************************************'
+       write(IMAIN,*) '      **** USING HYBRID METHOD  ****'
+       write(IMAIN,*) '**********************************************'
+       write(IMAIN,*)
+       write(IMAIN,*) ' create name database ',COUPLE_WITH_INJECTION_TECHNIQUE
+       write(IMAIN,*)
+       write(IMAIN,*) '**********************************************'
+    endif
   endif
 
 ! read the value of NSPEC_AB and NGLOB_AB because we need it to define some array sizes below
@@ -427,7 +432,7 @@
   implicit none
 
   ! local parameters
-  integer :: ncuda_devices,ncuda_devices_min,ncuda_devices_max
+  integer :: ncuda_devices,num_device,ncuda_devices_min,ncuda_devices_max
 
   ! GPU_MODE now defined in Par_file
   if (myrank == 0) then
@@ -449,8 +454,14 @@
 
   if (POROELASTIC_SIMULATION) stop 'poroelastic simulations on GPUs not supported yet'
 
+  if (NPROC == 1 .and. NUMBER_OF_SIMULTANEOUS_RUNS > 1 ) then
+    num_device = mygroup
+  else
+    num_device = myrank
+  endif
+
   ! initializes GPU and outputs info to files for all processes
-  call initialize_cuda_device(myrank,ncuda_devices)
+  call initialize_cuda_device(num_device,ncuda_devices)
 
   ! collects min/max of local devices found for statistics
   call synchronize_all()

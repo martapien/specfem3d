@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -33,6 +33,9 @@ module constants_meshfem3D
 
 end module constants_meshfem3D
 
+!
+!----------------------------------------------------------------------------------------------------
+!
 
 ! main parameter module for xmeshfem3D mesher
 
@@ -135,3 +138,5 @@ module meshfem3D_par
   logical :: BROADCAST_AFTER_READ
 
 end module meshfem3D_par
+
+

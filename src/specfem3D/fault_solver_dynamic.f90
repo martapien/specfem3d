@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -111,7 +111,10 @@ contains
 
   dummy_idfault = 0
 
+  ! note: all processes will open this file
   open(unit=IIN_PAR,file=IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//'Par_file_faults',status='old',iostat=ier)
+
+  ! checks if file exists
   if (ier /= 0) then
     if (myrank == 0) write(IMAIN,*) 'no dynamic faults'
     close(IIN_PAR)
@@ -120,11 +123,10 @@ contains
 
   read(IIN_PAR,*) nbfaults
   if (nbfaults == 0) then
-
     if (myrank == 0) write(IMAIN,*) 'No faults found in file DATA/Par_file_faults'
     return
   else if (nbfaults == 1) then
-      write(*,*) 'MYRANL' , myrank , 'there are ',nbfaults
+    !write(*,*) 'MYRANK' , myrank , 'there are ',nbfaults
     if (myrank == 0) write(IMAIN,*) 'There is 1 fault in file DATA/Par_file_faults'
   else
     if (myrank == 0) write(IMAIN,*) 'There are ', nbfaults, ' faults in file DATA/Par_file_faults'
@@ -287,7 +289,10 @@ contains
       call swf_init(bc%swf,bc%MU,bc%coord,IIN_PAR)
       if (TPV16) call TPV16_init() !WARNING: ad hoc, initializes T0 and swf
     endif
-!  call load_stress_tpv35
+
+!! unused
+! added by kangchen, this is specifically made for the Balochistan simulation
+!  call load_stress_tpv35()
 
   endif
   !bc%T=bc%T0
@@ -405,30 +410,32 @@ contains
 
     end subroutine load_stress_drop
 
-    subroutine load_stress_tpv35   !added by kangchen this is specially made for Balochistan Simulation
+!! unused
+! added by kangchen, this is specifically made for the Balochistan simulation
+!   subroutine load_stress_tpv35
 
-    use specfem_par, only: prname
+!   use specfem_par, only: prname
 
-    implicit none
+!   implicit none
 
-    real(kind=CUSTOM_REAL),dimension(bc%nglob) :: stresstmp, mustmp
-    character(len=70) :: filename
-    integer :: ier
-    integer,parameter :: IIN_STR = 122 ! could also use e.g. standard IIN from constants.h
+!   real(kind=CUSTOM_REAL),dimension(bc%nglob) :: stresstmp, mustmp
+!   character(len=70) :: filename
+!   integer :: ier
+!   integer,parameter :: IIN_STR = 122 ! could also use e.g. standard IIN from constants.h
 
-    filename = prname(1:len_trim(prname))//'tpv35_input.bin'
-    write(*,*) prname,bc%nglob
-    open(unit=IIN_STR,file=trim(filename),status='old',action='read',form='unformatted',iostat=ier)
-    read(IIN_STR) stresstmp
-    read(IIN_STR) mustmp
-    close(IIN_STR)
-    !   write(*,*) prname,bc%nglob,'successful'
+!   filename = prname(1:len_trim(prname))//'tpv35_input.bin'
+!   write(*,*) prname,bc%nglob
+!   open(unit=IIN_STR,file=trim(filename),status='old',action='read',form='unformatted',iostat=ier)
+!   read(IIN_STR) stresstmp
+!   read(IIN_STR) mustmp
+!   close(IIN_STR)
+!   !   write(*,*) prname,bc%nglob,'successful'
 
-    bc%T0(1,:)=stresstmp
-    bc%T(1,:) = stresstmp
-    bc%swf%mus = mustmp
+!   bc%T0(1,:)=stresstmp
+!   bc%T(1,:) = stresstmp
+!   bc%swf%mus = mustmp
 
-    end subroutine load_stress_tpv35
+!   end subroutine load_stress_tpv35
 
 
   end subroutine init_one_fault

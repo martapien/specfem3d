@@ -5,10 +5,10 @@
  !               ---------------------------------------
  !
  !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
- !                        Princeton University, USA
- !                and CNRS / University of Marseille, France
+ !                              CNRS, France
+ !                       and Princeton University, USA
  !                 (there are currently many more authors!)
- ! (c) Princeton University and CNRS / University of Marseille, July 2012
+ !                           (c) October 2017
  !
  ! This program is free software; you can redistribute it and/or modify
  ! it under the terms of the GNU General Public License as published by
@@ -103,6 +103,21 @@ void FC_FUNC_(transfer_b_fields_from_device,
   print_CUDA_error_if_any(cudaMemcpy(b_accel,mp->d_b_accel,sizeof(realw)*(*size),cudaMemcpyDeviceToHost),42008);
 
 }
+
+/* ----------------------------------------------------------------------------------------------- */
+
+extern "C"
+void FC_FUNC_(transfer_veloc_from_device,
+              TRANSFER_VELOC_FROM_DEVICE)(int* size, realw* veloc, long* Mesh_pointer) {
+
+  TRACE("transfer_veloc_from_device");
+
+  Mesh* mp = (Mesh*)(*Mesh_pointer); //get mesh pointer out of fortran integer container
+
+  print_CUDA_error_if_any(cudaMemcpy(veloc,mp->d_veloc,sizeof(realw)*(*size),cudaMemcpyDeviceToHost),40009);
+
+}
+
 
 
 /* ----------------------------------------------------------------------------------------------- */

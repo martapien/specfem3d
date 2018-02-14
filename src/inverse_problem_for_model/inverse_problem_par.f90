@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -50,15 +50,15 @@ module inverse_problem_par
   logical,                       public, parameter  :: VERBOSE_MODE=.true.
   !!! write kernels on disk
   logical,                       public, parameter  :: SAVE_KERNEL=.false.
-  !!! use fast code and undoing_attenuation for adjoints (in developmement ... not working yet)
-  logical,                       public, parameter  :: USE_UNDO_ATT=.false.
+  !!! use fast code and undoing_attenuation for adjoints (under development ... does not work yet)
+  logical,                       public, parameter  :: USE_UNDO_ATTENUATION_AND_OR_PML=.false.
   !!! projection on FD grid for outputs (in developmement if useful need to move elsewhere)
   logical,                       public             :: PROJ_ON_FD=.false.
   !!! test for some preconditionners (in developmement if useful need to move elsewhere)
   !!logical,                       public             :: USE_PRECOND_OIL_INDUSTRY=.false.
   !!! if needed use steepest descent instead of l-bfgs (if useful need to move elsewhere)
   logical,                       public             :: USE_GRADIENT_OPTIM=.false.
-  !! use simplified station location instead of specfem subroutin which can be problematic with a
+  !! use simplified station location instead of specfem subroutine which can be problematic with a
   !! big number of stations
   logical,                       public             :: USE_LIGHT_STATIONS=.true.
   ! ------------------------------  global parameters for fwi ---------------------------------------------------------------------
@@ -83,17 +83,36 @@ module inverse_problem_par
 
   end type profd !-----------------------------------------------------------------------------------------------------------------
 
-  ! INVERSION PARAMETERS STRUCTURE -------------------------------------------------------------------------------------------------
+  ! INVERSION PARAMETERS STRUCTURE ------------------------------------------------------------------------------------------------
   type, public :: inver
 
+
+     !! inputs files to read -------------------------------------------------------------------------------
      character(len= MAX_LEN_STRING)                                           :: input_acqui_file
      character(len= MAX_LEN_STRING)                                           :: input_inver_file
-     character(len= MAX_LEN_STRING)                                           :: param_family = "rho_vp_vs"
+
+     !! managing parameters family -------------------------------------------------------------------------
+     !! choice of family parameters  :
+     !! ISO : rho vp vs
+     !! VTI : rho vp vs ep gm de
+     !! ... todo add more ...
+     character(len=MAX_LEN_STRING)                                            :: parameter_family_name="ISO"
+     character(len=MAX_LEN_STRING), dimension(50)                             :: param_inv_name
+     character(len=MAX_LEN_STRING), dimension(50)                             :: param_ref_name
      integer                                                                  :: NfamilyPar = 3
      integer                                                                  :: NinvPar = 3
      integer, dimension(:), allocatable                                       :: Index_Invert
+     !! this is not useful todo remove it. -------------------------------------------------------
+     logical                                                                  :: use_log=.true.
+     !! ---------------------------------------------------------------------------------------------
+     integer                                                                  :: parameter_metric=2 ! see below :
+     !! choice of metric in parameter :
+     !! 0 : directly use the parameter P
+     !! 1 : use P / Pref
+     !! 2 : use log(P)
+     !! 3 : use log(P/Pref)
 
-     !! stopping criteria
+     !! stopping criteria ----------------------------------------------------------------------------------
      integer                                                                  :: Niter = 100
      integer                                                                  :: Niter_wolfe = 10
      real(kind=CUSTOM_REAL)                                                   :: relat_grad = 1.e-3
@@ -172,7 +191,7 @@ module inverse_problem_par
      !! projection in fd grid
      type(profd)                                                              :: projection_fd
 
-     !! regularization
+     !! regularization ----------------------------------------------------------------------------------------------------
      logical                                                                  :: use_regularization_FD_Tikonov=.false.
      logical                                                                  :: use_regularization_SEM_Tikonov=.false.
      logical                                                                  :: use_damping_SEM_Tikonov=.false.
@@ -185,8 +204,21 @@ module inverse_problem_par
      real(kind=CUSTOM_REAL),  dimension(:), allocatable                       :: smooth_weight, damp_weight
      !! prior model
      real(kind=CUSTOM_REAL), dimension(:,:,:,:,:), allocatable                :: prior_model
+     !!-------------------------------------------------------------------------------------------------------------------
+
+     !! inverted components
+     character(len=2),                       dimension(3)                     :: component
+     character(len=3)                                                         :: inverted_data_sys
+     logical, dimension(3)                                                    :: inverted_data_comp
+     character                                                                :: inverted_data_type
+     logical                                                                  :: is_src_weigh_gradient=.false.
+     logical                                                                  :: convolution_by_wavelet
 
      !! --- here add parameters for other methods (further developments)
+     logical                                                                  :: get_synthetic_pressure=.true.
+     logical                                                                  :: get_synthetic_displacement=.true.
+     logical                                                                  :: get_synthetic_velocity=.true.
+     logical                                                                  :: get_synthetic_acceleration=.true.
 
   end type inver !------------------------------------------------------------------------------------------------------------------
 
@@ -198,12 +230,14 @@ module inverse_problem_par
      integer                                                                   :: nevent_tot
      !! id for the event
      character(len= MAX_LEN_STRING)                                            :: event_name
+     !! name of pif event repository
+     character(len= MAX_LEN_STRING)                                            :: event_rep
      !! name for outputs files
      character(len= MAX_LEN_STRING)                                            :: prname_inversion
      !! file contains source parameter for 'moment' or 'fk' or axisem traction
      character(len= MAX_LEN_STRING)                                            :: source_file
      !! kind of source to be used ('moment', 'force', 'axisem', 'dsm', 'fk')
-     character(len=10)                                                         :: source_type
+     character(len=MAX_LEN_STRING)                                             :: source_type
      !!
      !! SB SB add source_type_physical and source_type_modeling to distinguish
      !!       between the method used for modeling (local point source(s), injection)
@@ -212,9 +246,9 @@ module inverse_problem_par
      !!       these informations.
      !!
      !! kind of source to be used ('moment', 'force')
-     character(len=256)                                                         :: source_type_physical
+     character(len=MAX_LEN_STRING)                                             :: source_type_physical
      !! kind of source to be used ('pointsource', 'finitefault','axisem', 'dsm', 'fk')
-     character(len=256)                                                         :: source_type_modeling
+     character(len=MAX_LEN_STRING)                                             :: source_type_modeling
      !! position of source in case of internal point source
      double precision, dimension(:), allocatable                               :: Xs,Ys,Zs
      !! source time function
@@ -228,7 +262,6 @@ module inverse_problem_par
      !! in case of exploration geophysics,
      !! saving temporary shot point to be able to read it directly in acqui_file
      real(kind=CUSTOM_REAL)                                                    :: xshot, yshot, zshot, shot_ampl
-
      !! --------------------- source parameter specific for Specfem ---------------------
      !! time parameters needed for specfem
      double precision, dimension(:), allocatable                               :: tshift, hdur, hdur_Gaussian
@@ -289,15 +322,18 @@ module inverse_problem_par
      real(kind=CUSTOM_REAL),                  dimension(:,:,:),   allocatable  :: window_to_invert
      !! low-high frequency used for FWI (NCOMP,2,NSTA)
      real(kind=CUSTOM_REAL),                  dimension(:,:,:),   allocatable  :: freqcy_to_invert
-     !! weigth on each trace used for FWI (NCOMP,NSTA)
-     real(kind=CUSTOM_REAL),                  dimension(:,:),     allocatable  :: weight_trace
+     !! weigth on each trace used for FWI (NCOMP,NSTA,NT)
+     real(kind=CUSTOM_REAL),                  dimension(:,:,:),   allocatable  :: weight_trace
+
      !! gather time sampling
      real(kind=CUSTOM_REAL)                                                    :: dt_data
      !! number of samples
      integer                                                                   :: Nt_data
      !! components used
      character(len=2),                        dimension(3)                     :: component
-
+     character(len=3)                                                          :: read_data_sys
+     logical, dimension(3)                                                     :: read_data_comp
+     character                                                                 :: read_data_type
      !! adjoint source to use
      character(len= MAX_LEN_STRING)                                            :: adjoint_source_type
 
@@ -315,7 +351,8 @@ module inverse_problem_par
      character(len= MAX_LEN_STRING)                                            :: station_coord_system
      !! station list
      real(kind=CUSTOM_REAL), dimension(:,:), allocatable                       :: read_station_position
-     real(kind=CUSTOM_REAL), dimension(:), allocatable                         :: time_pick
+     real(kind=CUSTOM_REAL), dimension(:), allocatable                         :: time_pick, baz, inc
+     real(kind=CUSTOM_REAL), dimension(:), allocatable                         :: dist, gcarc
 
      !! traction directory in case of AxiSem or DSM coupling
      character(len= MAX_LEN_STRING)                                            :: traction_dir

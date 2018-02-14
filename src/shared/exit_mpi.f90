@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -95,7 +95,7 @@
   implicit none
 
   ! only master process writes out to main output file
-  ! file I/O in fortran is buffered by default
+  ! file I/O in Fortran is buffered by default
   !
   ! note: Fortran2003 includes a FLUSH statement
   !          which is implemented by most compilers by now

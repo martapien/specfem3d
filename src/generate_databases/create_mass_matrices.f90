@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -383,7 +383,7 @@
         k = abs_boundary_ijk(3,igll,iface)
 
         ! gets global index
-        iglob=ibool(i,j,k,ispec)
+        iglob = ibool(i,j,k,ispec)
 
         ! gets associated, weighted jacobian
         jacobianw = abs_boundary_jacobian2Dw(igll,iface)

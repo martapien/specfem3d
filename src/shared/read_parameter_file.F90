@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -307,6 +307,22 @@
     if (ier /= 0) then
       some_parameters_missing_from_Par_file = .true.
       write(*,'(a)') 'BOTTOM_FREE_SURFACE             = .false.'
+      write(*,*)
+    endif
+
+    call read_value_logical(UNDO_ATTENUATION_AND_OR_PML, 'UNDO_ATTENUATION_AND_OR_PML', ier)
+    if (ier /= 0) then
+      some_parameters_missing_from_Par_file = .true.
+      write(*,'(a)') 'UNDO_ATTENUATION_AND_OR_PML     = .false.'
+      write(*,*)
+    endif
+!! DK DK temporary, will soon be implemented
+    if (UNDO_ATTENUATION_AND_OR_PML) stop 'error: UNDO_ATTENUATION_AND_OR_PML not implemented in this code yet'
+
+    call read_value_integer(NT_DUMP_ATTENUATION, 'NT_DUMP_ATTENUATION', ier)
+    if (ier /= 0) then
+      some_parameters_missing_from_Par_file = .true.
+      write(*,'(a)') 'NT_DUMP_ATTENUATION             = 500'
       write(*,*)
     endif
 
@@ -633,8 +649,8 @@
     endif
 
     ! check the type of external code to couple with, if any
-    if (MESH_A_CHUNK_OF_THE_EARTH .and. .not. COUPLE_WITH_INJECTION_TECHNIQUE) &
-      stop 'MESH_A_CHUNK_OF_THE_EARTH only available with COUPLE_WITH_INJECTION_TECHNIQUE for now, easy to change but not done yet'
+    !if (MESH_A_CHUNK_OF_THE_EARTH .and. .not. COUPLE_WITH_INJECTION_TECHNIQUE) &
+    !  stop 'MESH_A_CHUNK_OF_THE_EARTH only available with COUPLE_WITH_INJECTION_TECHNIQUE for now, easy to change but not done yet'
 
     if (COUPLE_WITH_INJECTION_TECHNIQUE) then
       if (INJECTION_TECHNIQUE_TYPE /= INJECTION_TECHNIQUE_IS_DSM .and. &
@@ -655,7 +671,6 @@
 
       if ( (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_DSM ) .and. &
            (.not. MESH_A_CHUNK_OF_THE_EARTH) ) stop 'Error, coupling with DSM only works with a Earth chunk mesh'
-
 
       if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_FK .and. MESH_A_CHUNK_OF_THE_EARTH) &
            stop 'Error: coupling with F-K is for models with a flat surface (Earth flattening), &
@@ -884,6 +899,8 @@
       !if (.not. sep_dir_exists) then
       !  stop 'Error: SEP_MODEL_DIRECTORY should exist.'
       !endif
+    case ('coupled')
+      IMODEL = IMODEL_COUPLED
     case default
       print *
       print *,'********** model not recognized: ',trim(MODEL),' **************'

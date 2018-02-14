@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@
   use specfem_par_elastic
   use specfem_par_acoustic
   use specfem_par_poroelastic
+  use specfem_par_movie
 
   implicit none
   integer :: ier
@@ -220,11 +221,11 @@
              epsilondev_xy(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
              epsilondev_xz(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
              epsilondev_yz(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
+             epsilondev_trace(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
              epsilon_trace_new(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), stat=ier)
     if (ier /= 0) stop 'Error allocating array epsilondev_xx etc.'
 
-    allocate(R_trace(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB,N_SLS), &
-             epsilondev_trace(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB),stat=ier)
+    allocate(R_trace(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB,N_SLS),stat=ier)
     if (ier /= 0) stop 'Error allocating array R_trace etc.'
 
     ! note: needed for some subroutine arguments
@@ -912,6 +913,25 @@
       if (ier /= 0) stop 'Error allocating num_elem_colors_elastic array'
     endif
   endif
+
+  ! for mesh surface
+  allocate(ispec_is_surface_external_mesh(NSPEC_AB), &
+           iglob_is_surface_external_mesh(NGLOB_AB),stat=ier)
+  if (ier /= 0) stop 'error allocating array for mesh surface'
+  ! determines model surface
+  ! returns surface points/elements in ispec_is_surface_external_mesh / iglob_is_surface_external_mesh
+  ! and number of faces in nfaces_surface
+  ! used for receiver detection, movie files and shakemaps
+  if (I_should_read_the_database) then
+    read(27) nfaces_surface
+    read(27) ispec_is_surface_external_mesh
+    read(27) iglob_is_surface_external_mesh
+  endif
+  call bcast_all_i_for_database(nfaces_surface, 1)
+  call bcast_all_l_for_database(ispec_is_surface_external_mesh(1), size(ispec_is_surface_external_mesh))
+  call bcast_all_l_for_database(iglob_is_surface_external_mesh(1), size(iglob_is_surface_external_mesh))
+
+  ! done reading database
   if (I_should_read_the_database) close(27)
 
   ! MPI communications
@@ -1152,15 +1172,15 @@
              b_epsilondev_yy(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
              b_epsilondev_xy(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
              b_epsilondev_xz(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
-             b_epsilondev_yz(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY),stat=ier)
+             b_epsilondev_yz(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY), &
+             b_epsilondev_trace(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY),stat=ier)
     if (ier /= 0) stop 'Error allocating array b_epsilondev_xx etc.'
     ! needed for kernel computations
     allocate(b_epsilon_trace_over_3(NGLLX,NGLLY,NGLLZ,NSPEC_ADJOINT),stat=ier)
     if (ier /= 0) stop 'Error allocating array b_epsilon_trace_over_3'
 
     ! allocates attenuation solids for considering kappa
-    allocate(b_R_trace(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB,N_SLS), &
-             b_epsilondev_trace(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB),stat=ier)
+    allocate(b_R_trace(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB,N_SLS),stat=ier)
     if (ier /= 0) stop 'Error allocating array b_R_trace etc.'
 
     ! Moho kernel
@@ -1422,3 +1442,4 @@
   if (I_should_read_the_database) close(IIN)
 
   end subroutine read_mesh_for_init
+

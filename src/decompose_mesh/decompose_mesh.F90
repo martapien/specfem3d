@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -47,7 +47,9 @@ module decompose_mesh
 
   implicit none
 
+#if defined(USE_SCOTCH)
   include 'scotchf.h'
+#endif
 
 !! DK DK added this because poroelastic repartitioning routine of Christina Morency is currently broken
 ! implement mesh repartitioning of poroelastic-elastic interface
@@ -115,11 +117,11 @@ module decompose_mesh
 
   integer, dimension(:), allocatable :: used_nodes_elmnts
 
-#ifdef USE_METIS_INSTEAD_OF_SCOTCH
+#if defined(USE_METIS_INSTEAD_OF_SCOTCH)
   integer :: edgecut,wgtflag,numflag
   integer, dimension(0:4) :: dummy_options
   integer, dimension(1) :: dummy_array
-#else
+#elif defined(USE_SCOTCH)
   double precision, dimension(SCOTCH_GRAPHDIM)  :: scotchgraph
   double precision, dimension(SCOTCH_STRATDIM)  :: scotchstrat
 !!!!!! character(len=*), parameter :: scotch_strategy='b{job=t,map=t,poli=S,sep=h{pass=30}}'
@@ -190,7 +192,7 @@ module decompose_mesh
     ! debug check size limit
     if (nspec_long > 2147483646) then
       print *,'size exceeds integer 4-byte limit: ',nspec_long
-      print *,'bit size fortran: ',bit_size(nspec)
+      print *,'bit size Fortran: ',bit_size(nspec)
       stop 'Error number of elements too large'
     endif
 
@@ -849,9 +851,6 @@ module decompose_mesh
         stop 'Error: found some unused nodes (weird, but not necessarily fatal; your mesher may have created extra nodes).'
     endif
 
-
-
-
     ! max number of elements that contain the same node
     nsize = maxval(used_nodes_elmnts(:))
 
@@ -897,7 +896,7 @@ module decompose_mesh
     print *, 'mesh2dual:'
     ncommonnodes = 1
     call mesh2dual_ncommonnodes(nspec, nnodes, nsize, sup_neighbor, elmnts, xadj, adjncy, nnodes_elmnts, &
-         nodes_elmnts, max_neighbor, ncommonnodes, NGNOD)
+                                nodes_elmnts, max_neighbor, ncommonnodes, NGNOD)
 
     ! user output
     print *, '  max_neighbor = ',max_neighbor
@@ -929,9 +928,9 @@ module decompose_mesh
     elmnts_load(:) = ACOUSTIC_LOAD
     ! then in case of acoustic/elastic/poro simulation, assign different weights to elements accordingly
     call acoustic_elastic_poro_load(elmnts_load,nspec,count_def_mat,count_undef_mat, &
-                                  num_material,mat_prop,undef_mat_prop,ATTENUATION)
+                                    num_material,mat_prop,undef_mat_prop,ATTENUATION)
 
-#ifdef USE_METIS_INSTEAD_OF_SCOTCH
+#if defined(USE_METIS_INSTEAD_OF_SCOTCH)
 
     ! METIS partitioning
 
@@ -947,7 +946,7 @@ module decompose_mesh
     print *,'total edgecut created by METIS = ',edgecut
     print *
 
-#else
+#elif defined(USE_SCOTCH)
 
     ! SCOTCH partitioning
 
@@ -1028,6 +1027,16 @@ module decompose_mesh
        stop 'Error : MAIN : Cannot destroy strategy'
     endif
 
+#else
+    ! no scotch/metis/.. partitioning, used for serial compilation without mpi
+    if (nparts > 1) then
+      print *,'Error: partitioning without MPI compilation only allows for single partition'
+      print *,'requested nparts = ',nparts
+      stop 'Error : invalid nparts value, must be equal 1!'
+    endif
+
+    ! single partition
+    part(:) = 0
 #endif
 
     ! re-partitioning puts poroelastic-elastic coupled elements into same partition

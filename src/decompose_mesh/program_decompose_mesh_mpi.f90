@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -344,7 +344,7 @@ subroutine send_partition_mesh_to_all(myrank, ipart, npart)
   allocate(nE_irank(npart))
   nE_irank(:)=0
   nE_loc_for_shut_up_compiler(1) = nE_loc
-  call all_gather_all_i(nE_loc_for_shut_up_compiler, 1, nE_irank, 1, npart)
+  call gather_all_all_i(nE_loc_for_shut_up_compiler, 1, nE_irank, 1, npart)
 
   nspec=nE_loc !! global varailble to be saved
   allocate(elmnts(NGNOD,nE_loc))

@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -233,7 +233,7 @@ subroutine BC_KINFLT_set_single(bc,MxA,V,D,iflt)
     timeval = it*bc%dt
     ! Slip_rate step "it_kin"
     it_kin = bc%kin_it*nint(bc%kin_dt/bc%dt)
-    ! (nint : fortran round (nearest whole number) ,
+    ! (nint : Fortran round (nearest whole number) ,
     !  if nint(a)=0.5 then "a" get upper bound )
 
     ! Loading the next slip_rate one ahead it.

@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -295,7 +295,7 @@ subroutine define_adios_byte_scalar (adios_group, group_size_inc, name, path, va
   integer(kind=8),  intent(in)     :: adios_group
   character(len=*), intent(in)     :: name, path
   integer(kind=8),  intent(inout)  :: group_size_inc
-  ! note: byte is non-standard gnu fortran
+  ! note: byte is non-standard gnu Fortran
   !byte,     intent(in)             :: var
   integer(kind=1),  intent(in)     :: var
   ! Local Variables

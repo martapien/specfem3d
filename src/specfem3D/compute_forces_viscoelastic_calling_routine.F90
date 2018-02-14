@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -472,7 +472,7 @@ subroutine compute_forces_viscoelastic_GPU_calling()
     ! while inner elements compute "Kernel_2", we wait for MPI to
     ! finish and transfer the boundary terms to the device asynchronously
     if (iphase == 2) then
-      !daniel: todo - this avoids calling the fortran vector send from CUDA routine
+      !daniel: todo - this avoids calling the Fortran vector send from CUDA routine
       ! wait for asynchronous copy to finish
       call sync_copy_from_device(Mesh_pointer,iphase,buffer_send_vector_ext_mesh)
 

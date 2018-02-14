@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -176,6 +176,7 @@
   ! user parameter
 
   ! enforces ratio Qs/Qp >= L factor from Anderson & Hart (1978)
+  ! IMPORTANT: this flag applies only if USE_OLSEN_ATTENUATION is true
   logical, parameter :: USE_ANDERSON_CRITERIA = .true.
 
   !-----------------------------------------------------
@@ -209,21 +210,29 @@
   if (myrank == 0) then
     write(IMAIN,*)
     write(IMAIN,*) "Attenuation:"
-    write(IMAIN,*) "The code uses a constant Q quality factor,"
-    write(IMAIN,*) "but approximated based on a series of Zener standard linear solids (SLS)."
-    write(IMAIN,*) "The approximation is performed in the following frequency band:"
+    write(IMAIN,*) "  The code uses a constant Q quality factor, but approximated"
+    write(IMAIN,*) "  based on a series of Zener standard linear solids (SLS)."
+    write(IMAIN,*)
+    write(IMAIN,*) "  Approximation is performed in the following frequency band:"
     write(IMAIN,*) "  Reference frequency requested by the user (Hz):",sngl(ATTENUATION_f0_REFERENCE), &
                                             " period (s):",sngl(1.0/ATTENUATION_f0_REFERENCE)
-    if (COMPUTE_FREQ_BAND_AUTOMATIC) write(IMAIN,*) "  The following values are computed automatically by the code based on &
-         &the estimated maximum frequency resolution of your mesh and can thus vary from what you have requested:"
-    write(IMAIN,*) "  Frequency band min/max (Hz):",sngl(1.0/MAX_ATTENUATION_PERIOD),sngl(1.0/MIN_ATTENUATION_PERIOD)
-    write(IMAIN,*) "  Period band min/max (s):",sngl(MIN_ATTENUATION_PERIOD),sngl(MAX_ATTENUATION_PERIOD)
+    if (COMPUTE_FREQ_BAND_AUTOMATIC) then
+      write(IMAIN,*)
+      write(IMAIN,*) "  The following values are computed automatically by the code"
+      write(IMAIN,*) "  based on the estimated maximum frequency resolution of your mesh"
+      write(IMAIN,*) "  and can thus vary from what you have requested."
+    endif
+    write(IMAIN,*)
+    write(IMAIN,*) "  Frequency band        min/max (Hz):",sngl(1.0/MAX_ATTENUATION_PERIOD),sngl(1.0/MIN_ATTENUATION_PERIOD)
+    write(IMAIN,*) "  Period band           min/max (s) :",sngl(MIN_ATTENUATION_PERIOD),sngl(MAX_ATTENUATION_PERIOD)
     write(IMAIN,*) "  Logarithmic central frequency (Hz):",sngl(f_c_source)," period (s):",sngl(1.0/f_c_source)
+    write(IMAIN,*)
     write(IMAIN,*) "  Using full attenuation with both Q_kappa and Q_mu."
     if (USE_OLSEN_ATTENUATION) then
-      write(IMAIN,*) "  using Olsen scaling with attenuation ratio Qmu/vs = ",sngl(OLSEN_ATTENUATION_RATIO)
-      if (USE_ANDERSON_CRITERIA) write(IMAIN,*) "  using Anderson and Hart criteria for ratio Qs/Qp"
+      write(IMAIN,*) "  Using Olsen scaling with attenuation ratio Qmu/vs = ",sngl(OLSEN_ATTENUATION_RATIO)
+      if (USE_ANDERSON_CRITERIA) write(IMAIN,*) "  Using Anderson and Hart criteria for ratio Qs/Qp"
     endif
+
     call flush_IMAIN()
   endif
 
@@ -279,62 +288,62 @@
           ! bulk moduli attenuation
           ! gets Q_kappa value
 
-            if (USE_OLSEN_ATTENUATION) then
-              ! bulk attenuation
-              ! compressional wave speed vp
-              vp_val = (kappastore(i,j,k,ispec) + 2.0d0 * mustore(i,j,k,ispec) / 3.0d0) / rho_vp(i,j,k,ispec)
+          if (USE_OLSEN_ATTENUATION) then
+            ! bulk attenuation
+            ! compressional wave speed vp
+            vp_val = (kappastore(i,j,k,ispec) + 2.0d0 * mustore(i,j,k,ispec) / 3.0d0) / rho_vp(i,j,k,ispec)
 
-              ! Anderson & Hart (1978), Q of the Earth, JGR, 83, No. B12
-              ! conversion between (Qp,Qs) and (Qkappa,Qmu)
-              ! factor L
-              L_val = 4.0d0/3.d0 * (vs_val/vp_val)**2
+            ! Anderson & Hart (1978), Q of the Earth, JGR, 83, No. B12
+            ! conversion between (Qp,Qs) and (Qkappa,Qmu)
+            ! factor L
+            L_val = 4.0d0/3.d0 * (vs_val/vp_val)**2
 
-              ! attenuation Qs (eq.1)
-              Q_s = Q_mu
+            ! attenuation Qs (eq.1)
+            Q_s = Q_mu
 
-              ! scales Qp from Qs (scaling factor introduced by Zhinan?)
-              ! todo: should we scale Qkappa directly? e.g. Q_kappa = 10.d0 * Q_mu
-              Q_p = 1.5d0 * Q_s
+            ! scales Qp from Qs (scaling factor introduced by Zhinan?)
+            ! todo: should we scale Qkappa directly? e.g. Q_kappa = 10.d0 * Q_mu
+            Q_p = 1.5d0 * Q_s
 
-              ! Anderson & Hart criteria: Qs/Qp >= L (eq. 4) since Qmu and Qkappa must be positive
-              if (USE_ANDERSON_CRITERIA) then
-                ! enforces (eq. 4) from Anderson & Hart
-                ! note: this might lead to Q_p < Q_s
-                if ((Q_s - L_val * Q_p) <= 0.d0 ) then
-                  ! negligible bulk attenuation (1/Q_kappa -> zero)
-                  Q_kappa = ATTENUATION_COMP_MAXIMUM
-                else
-                  ! converts to bulk attenuation (eq. 3)
-                  Q_kappa = (1.0d0 - L_val) * Q_p * Q_s / (Q_s - L_val * Q_p)
-                endif
+            ! Anderson & Hart criteria: Qs/Qp >= L (eq. 4) since Qmu and Qkappa must be positive
+            if (USE_ANDERSON_CRITERIA) then
+              ! enforces (eq. 4) from Anderson & Hart
+              ! note: this might lead to Q_p < Q_s
+              if ((Q_s - L_val * Q_p) <= 0.d0 ) then
+                ! negligible bulk attenuation (1/Q_kappa -> zero)
+                Q_kappa = ATTENUATION_COMP_MAXIMUM
               else
-                ! note: this case might lead to: Q_kappa < Q_mu
-                !       thus having a solid with stronger bulk attenuation than shear attenuation?
-
-                ! avoids division by zero
-                if (abs(Q_s - L_val * Q_p) <= 1.d-5 ) then
-                  Q_kappa = ATTENUATION_COMP_MAXIMUM
-                else
-                  ! converts to bulk attenuation (eq. 3)
-                  Q_kappa = (1.0d0 - L_val) * Q_p * Q_s / (Q_s - L_val * Q_p)
-                endif
+                ! converts to bulk attenuation (eq. 3)
+                Q_kappa = (1.0d0 - L_val) * Q_p * Q_s / (Q_s - L_val * Q_p)
               endif
-
             else
-              ! takes Q set in (CUBIT) mesh
-              Q_kappa = qkappa_attenuation_store(i,j,k,ispec)
+              ! note: this case might lead to: Q_kappa < Q_mu
+              !       thus having a solid with stronger bulk attenuation than shear attenuation?
+
+              ! avoids division by zero
+              if (abs(Q_s - L_val * Q_p) <= 1.d-5 ) then
+                Q_kappa = ATTENUATION_COMP_MAXIMUM
+              else
+                ! converts to bulk attenuation (eq. 3)
+                Q_kappa = (1.0d0 - L_val) * Q_p * Q_s / (Q_s - L_val * Q_p)
+              endif
             endif
 
-            ! attenuation zero (means negligible attenuation)
-            if (Q_kappa <= 1.e-5) Q_kappa = ATTENUATION_COMP_MAXIMUM
+          else
+            ! takes Q set in (CUBIT) mesh
+            Q_kappa = qkappa_attenuation_store(i,j,k,ispec)
+          endif
 
-            ! limits Q
-            if (Q_kappa < 1.0d0) Q_kappa = 1.0d0
-            if (Q_kappa > ATTENUATION_COMP_MAXIMUM) Q_kappa = ATTENUATION_COMP_MAXIMUM
+          ! attenuation zero (means negligible attenuation)
+          if (Q_kappa <= 1.e-5) Q_kappa = ATTENUATION_COMP_MAXIMUM
 
-            ! statistics on Q_kappa
-            if (Q_kappa < qmin_kappa) qmin_kappa = Q_kappa
-            if (Q_kappa > qmax_kappa) qmax_kappa = Q_kappa
+          ! limits Q
+          if (Q_kappa < 1.0d0) Q_kappa = 1.0d0
+          if (Q_kappa > ATTENUATION_COMP_MAXIMUM) Q_kappa = ATTENUATION_COMP_MAXIMUM
+
+          ! statistics on Q_kappa
+          if (Q_kappa < qmin_kappa) qmin_kappa = Q_kappa
+          if (Q_kappa > qmax_kappa) qmax_kappa = Q_kappa
 
           ! gets beta, on_minus_sum_beta and factor_scale
           ! based on calculation of strain relaxation times tau_eps
@@ -756,10 +765,9 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-
   subroutine get_attenuation_source_freq(f_c_source,min_period,max_period)
 
-! Determines the Source Frequency
+! determines the source frequency
 
   implicit none
 
@@ -767,15 +775,14 @@
   double precision,intent(in) :: min_period, max_period
 
   ! local parameters
-  double precision f1, f2,T_c_source
+  double precision :: f1, f2
 
   ! min/max frequencies
   f1 = 1.0d0 / max_period
   f2 = 1.0d0 / min_period
 
-  T_c_source =  1.0e+03 * 10.0d0**(0.5 * (log10(f1) + log10(f2)))
-  ! central frequency
-  f_c_source = T_c_source / 1000.0d0
+  ! use the logarithmic central frequency
+  f_c_source = 10.0d0**(0.5 * (log10(f1) + log10(f2)))
 
   end subroutine get_attenuation_source_freq
 
@@ -805,7 +812,7 @@
 !  - minor modifications by Daniel Peter, november 2010
 !--------------------------------------------------------------------------------------------------
 
-  subroutine get_attenuation_tau_eps(Qmu_in,tau_s,tau_eps,min_period,max_period)
+  subroutine get_attenuation_tau_eps(Q_in,tau_s,tau_eps,min_period,max_period)
 
 ! includes min_period, max_period, and N_SLS
 !
@@ -818,7 +825,7 @@
 ! model_attenuation_variables
 !...
 
-  double precision :: Qmu_in
+  double precision :: Q_in
   double precision, dimension(N_SLS) :: tau_s, tau_eps
   double precision :: min_period,max_period
 
@@ -827,14 +834,14 @@
 
   ! READ
   rw = 1
-  call model_attenuation_storage(Qmu_in, tau_eps, rw)
+  call model_attenuation_storage(Q_in, tau_eps, rw)
   if (rw > 0) return
 
-  call attenuation_invert_by_simplex(min_period, max_period, N_SLS, Qmu_in, tau_s, tau_eps)
+  call attenuation_invert_by_simplex(min_period, max_period, N_SLS, Q_in, tau_s, tau_eps)
 
   ! WRITE
   rw = -1
-  call model_attenuation_storage(Qmu_in, tau_eps, rw)
+  call model_attenuation_storage(Q_in, tau_eps, rw)
 
   end subroutine get_attenuation_tau_eps
 
@@ -1569,3 +1576,4 @@
   deallocate(AS_V%tau_s)
 
   end subroutine attenuation_simplex_finish
+

@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -109,10 +109,6 @@ subroutine compute_forces_viscoelastic(iphase, &
 ! memory variables and standard linear solids for attenuation
   logical :: ATTENUATION
   logical :: COMPUTE_AND_STORE_STRAIN
-  !logical :: COUPLE_WITH_INJECTION_TECHNIQUE, INJECTION_TECHNIQUE_TYPE, &
-  !  INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INJECTION_BOX_LOCATION, &
-  !  INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER
-
   integer :: NSPEC_STRAIN_ONLY, NSPEC_ADJOINT
   integer :: NSPEC_ATTENUATION_AB
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB) :: one_minus_sum_beta
@@ -126,7 +122,8 @@ subroutine compute_forces_viscoelastic(iphase, &
 
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY) :: &
             epsilondev_xx,epsilondev_yy,epsilondev_xy,epsilondev_xz,epsilondev_yz, epsilon_trace_new
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB) :: epsilondev_trace
+  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_STRAIN_ONLY) :: epsilondev_trace
+
   real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ADJOINT) :: epsilon_trace_over_3
 
 ! lddrk for update the memory variables
@@ -910,3 +907,4 @@ subroutine compute_strain_in_element(tempx1_att,tempx2_att,tempx3_att,tempx1,tem
   enddo
 
 end subroutine compute_strain_in_element
+

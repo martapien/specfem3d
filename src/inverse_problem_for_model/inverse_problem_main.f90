@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -71,6 +71,7 @@ subroutine inverse_problem_main()
   logical                                :: finished
   character(len=MAX_LEN_STRING)          :: mode_running
 
+
   !!!##############################################################################################################################
   !!! ---------------------------------------------- INITIALIZE RUNTIME ----------------------------------------------------------
   !!!##############################################################################################################################
@@ -93,8 +94,6 @@ subroutine inverse_problem_main()
   !! set up projection on fd grid if asked (for snapshot, movie, smoothing ...)
   if (PROJ_ON_FD) call compute_interpolation_coeff_FD_SEM(projection_fd, myrank)
 
-
-
   !!!##############################################################################################################################
   !!! -------------------------------  different running mode : forward or FWI ----------------------------------------------------
   !!!##############################################################################################################################
@@ -109,7 +108,7 @@ subroutine inverse_problem_main()
         write(INVERSE_LOG_FILE,*)
         write(INVERSE_LOG_FILE,*)
         write(INVERSE_LOG_FILE,*)  '        Specfem inverse problem : Forward only problem ...  '
-        write(INVERSE_LOG_FILE,*)  '        with generic family parameters  : ', trim(inversion_param%param_family)
+        write(INVERSE_LOG_FILE,*)  '        with generic family parameters  : ', trim(inversion_param%parameter_family_name)
         write(INVERSE_LOG_FILE,*)
         write(INVERSE_LOG_FILE,*)
         write(INVERSE_LOG_FILE,*)
@@ -119,6 +118,8 @@ subroutine inverse_problem_main()
      do ievent = 1, acqui_simu(1)%nevent_tot
         call ComputeSismosPerEvent(ievent, acqui_simu, 0, inversion_param, myrank)
      enddo
+
+     call synchronize_all_world()
 
      !! writing model in SEM mesh : (rho, vp, vs) or cijkl.
      if (inversion_param%output_model)  call WriteOuptutSEMmodel(inversion_param)
@@ -133,7 +134,7 @@ subroutine inverse_problem_main()
         write(INVERSE_LOG_FILE,*)
         write(INVERSE_LOG_FILE,*)
         write(INVERSE_LOG_FILE,*)  '        Specfem inverse problem : L-BFGS FWI ...  '
-        write(INVERSE_LOG_FILE,*)  '        with family parameters  : ', trim(inversion_param%param_family)
+        write(INVERSE_LOG_FILE,*)  '        with family parameters  : ', trim(inversion_param%parameter_family_name)
         write(INVERSE_LOG_FILE,*)  '        memory needed  ', inversion_param%max_history_bfgs
         write(INVERSE_LOG_FILE,*)
         write(INVERSE_LOG_FILE,*)
@@ -186,6 +187,17 @@ subroutine inverse_problem_main()
      if (myrank == 0) write(*,*) ' ERROR :', trim(mode_running),  ':  option not defined '
 
   end select
+
+
+  !! SB
+  close(IIDD)
+  if (myrank == 0) then
+     close(OUTPUT_ITERATION_FILE)
+     close(INVERSE_LOG_FILE)
+     close(OUTPUT_FWI_LOG)
+  endif
+  ! parce que sinon je dois mettre un rpint...
+  call synchronize_all_world()
 
 end subroutine inverse_problem_main
 

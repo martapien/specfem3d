@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -335,7 +335,7 @@
       if (nglob_interface_PML_elastic > 2147483646 / (CUSTOM_REAL * 9)) then
         print *,'reclen needed exceeds integer 4-byte limit: ',b_reclen_PML_field
         print *,'  ',CUSTOM_REAL, NDIM, 9, nglob_interface_PML_elastic
-        print *,'bit size fortran: ',bit_size(b_reclen_PML_field)
+        print *,'bit size Fortran: ',bit_size(b_reclen_PML_field)
         call exit_MPI(myrank,"error b_reclen_PML_field integer limit")
       endif
 
@@ -379,7 +379,7 @@
       if (nglob_interface_PML_acoustic > 2147483646 / (CUSTOM_REAL)) then
         print *,'reclen needed exceeds integer 4-byte limit: ',b_reclen_PML_potential
         print *,'  ',CUSTOM_REAL, nglob_interface_PML_acoustic
-        print *,'bit size fortran: ',bit_size(b_reclen_PML_potential)
+        print *,'bit size Fortran: ',bit_size(b_reclen_PML_potential)
         call exit_MPI(myrank,"error b_reclen_PML_potential integer limit")
       endif
 

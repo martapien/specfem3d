@@ -29,7 +29,7 @@ Lat2dis = 100.0      # latitude to km conversion factor
                      # change the whole mesh generation script.
 Lon2dis = 76.0       # longitude to km conversion factor
 zcutBottom = 100.0   # bottom depth of the fault in km, preliminary value (the final depth is set in exportmesh.py)
-zcutTop = 2.0        # steepen the fault surface above this depth in km
+zcutTop = 15.0        # steepen the fault surface above this depth in km
                      # to avoid elements with small angles at the trench
                      # Use the matlab script demo_subduction_smoothing.m to explore this feature
 rotate = -15         # set this to minus average strike. Approximately aligns the trench with the Y axis to facilitate meshing
@@ -61,11 +61,14 @@ yc = 0.5*(Latmin+Latmax)
 # by making the fault dip angle steeper above depth "z"
 # to avoid elements with small angles at the trench.
 # See demo_subduction_smoothing.m
-def surf(z):
-    c = 2.0/zcutTop
-    f = -math.log(math.exp(-c*z)-1)/c
-    f = max(f,-zcutBottom)
-    return f
+def surf(z, minz):
+#    c = 0.5/zcutTop
+#    f = -math.log(math.exp(-c*min(z - minz, -0.1))-1)/c + minz
+    if(z > -zcutTop):
+        f = z + 2.0 * (z + zcutTop);
+    else:
+        f = z
+    return max(f, -zcutBottom)
 
 
 def import_elev_data():
@@ -87,7 +90,7 @@ def import_elev_data():
 def import_slab_data(filename):
     data = np.loadtxt(filename)
     data = data[np.bitwise_not(np.isnan(data[:,2])),:]
-    data = data[np.bitwise_and(np.bitwise_and(data[:,1]>=Latmin, data[:,1]<=Latmax),data[:,2]>-zcutBottom*1.2)]
+    data = data[np.bitwise_and(np.bitwise_and(data[:,1]>=Latmin, data[:,1]<=Latmax),data[:,2]>-zcutBottom*2.5)]
     return data
 
 
@@ -129,18 +132,19 @@ data[:,0]=data[:,0]-xc
 data[:,1]=data[:,1]-yc
 #data[:,0:2] = rotate(data[:,0:2],45)
 N,D = data.shape
-
+mindepth = max(data[:,2])
 # falt surface: create one spline per latitude
 print(N)
 start = 1
 n_curve = 0
 n = 0
 for ii in range(0,N):
-    vert = "create vertex x "+str(data[ii,0]*Lon2dis)+" y "+str(data[ii,1]*Lat2dis)+" z "+str(surf(data[ii,2]))
+    vert = "create vertex x "+str(data[ii,0]*Lon2dis)+" y "+str(data[ii,1]*Lat2dis)+" z "+str(surf(data[ii,2], mindepth))
     cubit.cmd(vert)
     if(ii<N-1):
         if(data[ii,1]!=data[ii+1,1]):
             end = ii+1
+            mindepth = data[ii,2]
             if(n%10 == 0):
                 cc = "create curve spline vertex "+str(start)+" to "+str(end)+" delete"
                 cubit.cmd(cc)

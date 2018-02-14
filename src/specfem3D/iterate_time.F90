@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -51,6 +51,9 @@
   character(len=MAX_STRING_LEN) outputname
   ! timing
   double precision, external :: wtime
+#ifdef VTK_VIS
+  logical :: do_restart = .false.
+#endif
 
   !! for FK point for intialization injected wavefield
   real(kind=CUSTOM_REAL) :: Xmin_box, Xmax_box, Ymin_box, Ymax_box, Zmin_box, Zmax_box
@@ -92,142 +95,135 @@
 !  initial setup for future FK3D calculations
 ! ********************************************
 
-  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_FK .and. SIMULATION_TYPE == 1) then
+  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. SIMULATION_TYPE == 1) then
 
-    call nbound(NSPEC_AB,num_abs_boundary_faces,abs_boundary_ispec,ispec_is_elastic,npt)
+    if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_FK) then
 
-    !! compute the bottom midle point of the domain
+      call nbound(NSPEC_AB,num_abs_boundary_faces,abs_boundary_ispec,ispec_is_elastic,npt)
 
-
-    !! VM VM dealocate in case of severals runs occurs in inverse_problem program
-    if (allocated(nbdglb)) deallocate(nbdglb)
-    if (allocated(vx_FK))  deallocate(vx_FK)
-    if (allocated(vy_FK))  deallocate(vy_FK)
-    if (allocated(vz_FK))  deallocate(vz_FK)
-    if (allocated(tx_FK))  deallocate(tx_FK)
-    if (allocated(ty_FK))  deallocate(ty_FK)
-    if (allocated(tz_FK))  deallocate(tz_FK)
-    if (allocated(VX_t))   deallocate(VX_t)
-    if (allocated(VY_t))   deallocate(VY_t)
-    if (allocated(VZ_t))   deallocate(VZ_t)
-    if (allocated(TX_t))   deallocate(TX_t)
-    if (allocated(TY_t))   deallocate(TY_t)
-    if (allocated(TZ_t))   deallocate(TZ_t)
-
-    !! allocate memory for FK solution
-    if (npt > 0) then
-
-       allocate(nbdglb(npt))
-       allocate(vx_FK(npt),vy_FK(npt),vz_FK(npt),tx_FK(npt),ty_FK(npt),tz_FK(npt))
-
-    else
-
-       allocate(nbdglb(1))
-       allocate(vx_FK(1),vy_FK(1),vz_FK(1),tx_FK(1),ty_FK(1),tz_FK(1))
-
-    endif
-
-    call FindBoundaryBox(Xmin_box, Xmax_box, Ymin_box, Ymax_box, Zmin_box, Zmax_box)
-
-    if (myrank == 0) then
-
-       call ReadFKModelInput(Xmin_box, Xmax_box, Ymin_box, Ymax_box, Zmin_box)
-
-    endif
-
-    ! send FK parameters to others MPI slices
-
-    call bcast_all_singlei(kpsv)
-    call bcast_all_singlei(nlayer)
-    if (myrank > 0) allocate(al_FK(nlayer),be_FK(nlayer),mu_FK(nlayer),h_FK(nlayer))
-    call bcast_all_cr(al_FK, nlayer)
-    call bcast_all_cr(be_FK, nlayer)
-    call bcast_all_cr(mu_FK, nlayer)
-    call bcast_all_cr(h_FK, nlayer)
-    call bcast_all_singlecr(phi_FK)
-    call bcast_all_singlecr(theta_FK)
-    call bcast_all_singlecr(ff0)
-    call bcast_all_singlecr(xx0)
-    call bcast_all_singlecr(yy0)
-    call bcast_all_singlecr(zz0)
-    call bcast_all_singlecr(tt0)
-    call bcast_all_singlecr(Z_REF_for_FK)
-    call bcast_all_singlecr(tmax_fk)
-    call bcast_all_singlel(stag)
+      !! compute the bottom midle point of the domain
 
 
-    phi_FK   = phi_FK*acos(-1.d0)/180.d0
-    theta_FK = theta_FK*acos(-1.d0)/180.d0
+      !! VM VM dealocate in case of severals runs occurs in inverse_problem program
+      if (allocated(nbdglb)) deallocate(nbdglb)
+      if (allocated(vx_FK))  deallocate(vx_FK)
+      if (allocated(vy_FK))  deallocate(vy_FK)
+      if (allocated(vz_FK))  deallocate(vz_FK)
+      if (allocated(tx_FK))  deallocate(tx_FK)
+      if (allocated(ty_FK))  deallocate(ty_FK)
+      if (allocated(tz_FK))  deallocate(tz_FK)
+      if (allocated(VX_t))   deallocate(VX_t)
+      if (allocated(VY_t))   deallocate(VY_t)
+      if (allocated(VZ_t))   deallocate(VZ_t)
+      if (allocated(TX_t))   deallocate(TX_t)
+      if (allocated(TY_t))   deallocate(TY_t)
+      if (allocated(TZ_t))   deallocate(TZ_t)
 
-    if (kpsv == 1) then
-       p = sin(theta_FK)/al_FK(nlayer)
-    else if (kpsv == 2) then
-       p = sin(theta_FK)/be_FK(nlayer)
-    endif
+      !! allocate memory for FK solution
+      if (npt > 0) then
+        allocate(nbdglb(npt))
+        allocate(vx_FK(npt),vy_FK(npt),vz_FK(npt),tx_FK(npt),ty_FK(npt),tz_FK(npt))
+      else
+        allocate(nbdglb(1))
+        allocate(vx_FK(1),vy_FK(1),vz_FK(1),tx_FK(1),ty_FK(1),tz_FK(1))
+      endif
 
-    tg  = 1.d0/ff0
+      call FindBoundaryBox(Xmin_box, Xmax_box, Ymin_box, Ymax_box, Zmin_box, Zmax_box)
 
-    !-------------------------------------------------------------
-    ! get MPI starting time for FK
-    time_start = wtime()
+      if (myrank == 0) then
+        call ReadFKModelInput(Xmin_box, Xmax_box, Ymin_box, Ymax_box, Zmin_box)
+      endif
 
-    if (npt > 0) then
-
-       call find_size_of_working_arrays(deltat, tmax_fk, NF_FOR_STORING, NF_FOR_FFT, NPOW_FOR_INTERP, NP_RESAMP, DF_FK)
-       if (myrank == 0) write(IMAIN,*) 'ALLOCATE SAVED ARRAYS ', NF_FOR_STORING, NF_FOR_FFT, npt
-
-       !! arrays for storing FK solution --------------------------------------------
-
-       allocate(VX_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
-       if (ier /= 0) stop 'error while allocating VX_t'
-       VX_t(:,:)=0._CUSTOM_REAL
-
-       allocate(VY_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
-       if (ier /= 0) stop 'error while allocating VY_t'
-       VY_t(:,:)=0._CUSTOM_REAL
-
-       allocate(VZ_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
-       if (ier /= 0) stop 'error while allocating VZ_t'
-       VZ_t(:,:)=0._CUSTOM_REAL
-
-       allocate(TX_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
-       if (ier /= 0) stop 'error while allocating TX_t'
-       TX_t(:,:)=0._CUSTOM_REAL
-
-       allocate(TY_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
-       if (ier /= 0) stop 'error while allocating TY_t'
-       TY_t(:,:)=0._CUSTOM_REAL
-
-       allocate(TZ_t(npt, -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
-       if (ier /= 0) stop 'error while allocating TZ_t'
-       TZ_t(:,:)=0._CUSTOM_REAL
+      ! send FK parameters to others MPI slices
+      call bcast_all_singlei(kpsv)
+      call bcast_all_singlei(nlayer)
+      if (myrank > 0) allocate(al_FK(nlayer),be_FK(nlayer),mu_FK(nlayer),h_FK(nlayer))
+      call bcast_all_cr(al_FK, nlayer)
+      call bcast_all_cr(be_FK, nlayer)
+      call bcast_all_cr(mu_FK, nlayer)
+      call bcast_all_cr(h_FK, nlayer)
+      call bcast_all_singlecr(phi_FK)
+      call bcast_all_singlecr(theta_FK)
+      call bcast_all_singlecr(ff0)
+      call bcast_all_singlecr(xx0)
+      call bcast_all_singlecr(yy0)
+      call bcast_all_singlecr(zz0)
+      call bcast_all_singlecr(tt0)
+      call bcast_all_singlecr(Z_REF_for_FK)
+      call bcast_all_singlecr(tmax_fk)
+      call bcast_all_singlel(stag)
 
 
+      phi_FK   = phi_FK*acos(-1.d0)/180.d0
+      theta_FK = theta_FK*acos(-1.d0)/180.d0
 
-       call FK3D(myrank, NSPEC_AB, ibool, abs_boundary_ijk, abs_boundary_normal, &
+      if (kpsv == 1) then
+        p = sin(theta_FK)/al_FK(nlayer)
+      else if (kpsv == 2) then
+        p = sin(theta_FK)/be_FK(nlayer)
+      endif
+
+      tg  = 1.d0/ff0
+
+      !-------------------------------------------------------------
+      ! get MPI starting time for FK
+      time_start = wtime()
+
+      if (npt > 0) then
+
+        call find_size_of_working_arrays(deltat, tmax_fk, NF_FOR_STORING, NF_FOR_FFT, NPOW_FOR_INTERP, NP_RESAMP, DF_FK)
+        if (myrank == 0) write(IMAIN,*) 'ALLOCATE SAVED ARRAYS ', NF_FOR_STORING, NF_FOR_FFT, npt
+
+        !! arrays for storing FK solution --------------------------------------------
+
+        allocate(VX_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
+        if (ier /= 0) stop 'error while allocating VX_t'
+        VX_t(:,:)=0._CUSTOM_REAL
+
+        allocate(VY_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
+        if (ier /= 0) stop 'error while allocating VY_t'
+        VY_t(:,:)=0._CUSTOM_REAL
+
+        allocate(VZ_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
+        if (ier /= 0) stop 'error while allocating VZ_t'
+        VZ_t(:,:)=0._CUSTOM_REAL
+
+        allocate(TX_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
+        if (ier /= 0) stop 'error while allocating TX_t'
+        TX_t(:,:)=0._CUSTOM_REAL
+
+        allocate(TY_t(npt,  -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
+        if (ier /= 0) stop 'error while allocating TY_t'
+        TY_t(:,:)=0._CUSTOM_REAL
+
+        allocate(TZ_t(npt, -NP_RESAMP:NF_FOR_STORING+NP_RESAMP),stat=ier)
+        if (ier /= 0) stop 'error while allocating TZ_t'
+        TZ_t(:,:)=0._CUSTOM_REAL
+
+        call FK3D(myrank, NSPEC_AB, ibool, abs_boundary_ijk, abs_boundary_normal, &
             abs_boundary_ispec, num_abs_boundary_faces, ispec_is_elastic, kpsv, nlayer, nstep, npt, nbdglb, &
             p, phi_FK, xx0, yy0, zz0, tg, &
             tt0, al_FK, be_FK, mu_FK, h_FK, deltat, &
             NF_FOR_STORING, NPOW_FOR_FFT, NP_RESAMP, DF_FK)
 
-    endif
+      endif
 
-    call synchronize_all()
+      call synchronize_all()
 
-    !-------------------------------------------------------------
-    ! get MPI ending ting time for FK
-    time_start = wtime() - time_start
-    if (myrank == 0) then
-       write(IMAIN, *)
-       write(IMAIN, '(a35,1x, f20.2, a7)')  " Elapsed time for FK computation : ",  time_start, " sec. "
-       write(IMAIN, *)
-       write(IMAIN,*) " ********************************************** "
-       call flush_IMAIN()
-    endif
+      !-------------------------------------------------------------
+      ! get MPI ending ting time for FK
+      time_start = wtime() - time_start
+      if (myrank == 0) then
+        write(IMAIN, *)
+        write(IMAIN, '(a35,1x, f20.2, a7)')  " Elapsed time for FK computation : ",  time_start, " sec. "
+        write(IMAIN, *)
+        write(IMAIN,*) " ********************************************** "
+        call flush_IMAIN()
+      endif
 
-    deallocate(al_FK, be_FK, mu_FK, h_FK)
-
- endif
+      deallocate(al_FK, be_FK, mu_FK, h_FK)
+   endif
+  endif
 
 ! *****************************************************
 ! * end of initial setup for future FK3D calculations *
@@ -237,6 +233,15 @@
 !
 !   s t a r t   t i m e   i t e r a t i o n s
 !
+#ifdef VTK_VIS
+  ! restart: goto starting point
+123 continue
+  if (VTK_MODE) then
+    if (do_restart) then
+      if (myrank == 0) print *,'VTK_VIS: restarting simulation'
+    endif
+  endif
+#endif
 
   ! synchronize all processes to make sure everybody is ready to start time loop
   call synchronize_all()
@@ -270,8 +275,8 @@
 
     if (GPU_MODE) call exit_MPI(myrank,'EXACT_UNDOING_TO_DISK not supported for GPUs')
 
-    if (UNDO_ATTENUATION) &
-      call exit_MPI(myrank,'EXACT_UNDOING_TO_DISK needs UNDO_ATTENUATION to be off because it computes the kernel directly instead')
+    if (UNDO_ATTENUATION_AND_OR_PML) call exit_MPI(myrank,'EXACT_UNDOING_TO_DISK needs UNDO_ATTENUATION_AND_OR_PML &
+               &to be off because it computes the kernel directly instead')
 
     if (SIMULATION_TYPE == 1 .and. .not. SAVE_FORWARD) &
       call exit_MPI(myrank,'EXACT_UNDOING_TO_DISK requires SAVE_FORWARD if SIMULATION_TYPE == 1')
@@ -425,10 +430,12 @@
                             num_free_surface_faces,free_surface_ispec,free_surface_ijk,Mesh_pointer,GPU_MODE)
     endif
 
-    ! updates VTK window
+#ifdef VTK_VIS
     if (VTK_MODE) then
-      call it_update_vtkwindow()
+      ! updates VTK window
+      call vtk_window_update()
     endif
+#endif
 
     !! CD CD add this : under validation option
     if (RECIPROCITY_AND_KH_INTEGRAL) then
@@ -462,6 +469,21 @@
 !----  close energy file
   if (OUTPUT_ENERGY .and. myrank == 0) close(IOUT_ENERGY)
 
+#ifdef VTK_VIS
+  if (VTK_MODE) then
+    ! frees memory
+    call vtk_window_cleanup(do_restart)
+
+    ! check if restart time iterations
+    if (do_restart) then
+      goto 123
+    endif
+  endif
+#endif
+
+  ! cleanup GPU arrays
+  if (GPU_MODE) call it_cleanup_GPU()
+
   end subroutine iterate_time
 
 !
@@ -473,8 +495,6 @@
   use constants
 
   use specfem_par
-
-  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, INJECTION_TECHNIQUE_TYPE
 
   implicit none
 
@@ -845,6 +865,20 @@
 
   endif
 
+  end subroutine it_transfer_from_GPU
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine it_cleanup_GPU()
+
+  use specfem_par
+  use specfem_par_elastic
+  use specfem_par_acoustic
+
+  implicit none
+
   ! from here on, no gpu data is needed anymore
   ! frees allocated memory on GPU
   call prepare_cleanup_device(Mesh_pointer,ACOUSTIC_SIMULATION,ELASTIC_SIMULATION, &
@@ -852,23 +886,12 @@
                               ATTENUATION,ANISOTROPY,APPROXIMATE_OCEAN_LOAD, &
                               APPROXIMATE_HESS_KL)
 
-  end subroutine it_transfer_from_GPU
+  end subroutine it_cleanup_GPU
 
 !
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine it_update_vtkwindow()
-
-  implicit none
-
-  stop 'it_update_vtkwindow() not implemented for this code yet'
-
-  end subroutine it_update_vtkwindow
-
-!
-!-------------------------------------------------------------------------------------------------
-!
 
   subroutine it_read_forward_arrays()
 
@@ -1116,7 +1139,7 @@
        endif
 
        zz0 = Zmin_box - Radius_box * sin ( abs (theta_FK) * (acos(-1.d0) / 180.d0)  ) -  &
-             wave_length_at_bottom * cos ( abs (theta_FK) * (acos(-1.d0) / 180.d0)  ) -  &
+             3.*wave_length_at_bottom * cos ( abs (theta_FK) * (acos(-1.d0) / 180.d0)  ) -  &
              Z_ref_for_FK
 
     endif

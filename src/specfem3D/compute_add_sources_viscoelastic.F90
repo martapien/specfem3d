@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -425,7 +425,7 @@
       enddo
 
       ! only implements SIMTYPE=1 and NOISE_TOM=0
-      ! write(*,*) "fortran dt = ", dt
+      ! write(*,*) "Fortran dt = ", dt
       ! change dt -> DT
       call compute_add_sources_el_cuda(Mesh_pointer,stf_pre_compute,NSOURCES)
     endif

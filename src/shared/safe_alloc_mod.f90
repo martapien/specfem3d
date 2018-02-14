@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -134,7 +134,7 @@ contains
 !==============================================================================
 !>
 subroutine check_alloc_err(ier, usr_msg)
-  use iso_fortran_env, only: error_unit
+  use iso_Fortran_env, only: error_unit
 
   integer, intent(in) :: ier
   character(len=*), intent(in), optional :: usr_msg
@@ -157,7 +157,7 @@ end subroutine check_alloc_err
 !==============================================================================
 !>
 subroutine check_dealloc_err(ier, usr_msg)
-  use iso_fortran_env, only: error_unit
+  use iso_Fortran_env, only: error_unit
 
   integer, intent(in) :: ier
   character(len=*), intent(in), optional :: usr_msg

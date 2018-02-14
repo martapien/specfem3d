@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -26,11 +26,15 @@
 !=====================================================================
 !
 ! United States and French Government Sponsorship Acknowledged.
-
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!-------------------------------------------------------------------------------------------------------------
+!
+!-------------------------------------------------------------------------------------------------------------
 subroutine sum_all_all_cr_for_simulatenous_runs(sendbuf, recvbuf, countval)
 
   use my_mpi
   use constants, only: CUSTOM_REAL
+  use shared_parameters, only: NUMBER_OF_SIMULTANEOUS_RUNS
 
   implicit none
 
@@ -40,15 +44,25 @@ subroutine sum_all_all_cr_for_simulatenous_runs(sendbuf, recvbuf, countval)
   real(kind=CUSTOM_REAL), intent(in)    :: sendbuf
   real(kind=CUSTOM_REAL), intent(inout) :: recvbuf
   integer                               :: ier
+
+  if (NUMBER_OF_SIMULTANEOUS_RUNS <= 1) then
+     recvbuf=sendbuf
+     return
+  endif
 
   call MPI_ALLREDUCE(sendbuf, recvbuf, countval, CUSTOM_MPI_TYPE, MPI_SUM, my_local_mpi_comm_for_bcast, ier)
 
 end subroutine sum_all_all_cr_for_simulatenous_runs
 
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!-------------------------------------------------------------------------------------------------------------
+!
+!-------------------------------------------------------------------------------------------------------------
 subroutine max_all_all_cr_for_simulatenous_runs(sendbuf, recvbuf, countval)
 
   use my_mpi
   use constants, only: CUSTOM_REAL
+  use shared_parameters, only: NUMBER_OF_SIMULTANEOUS_RUNS
 
   implicit none
 
@@ -58,15 +72,24 @@ subroutine max_all_all_cr_for_simulatenous_runs(sendbuf, recvbuf, countval)
   real(kind=CUSTOM_REAL), intent(in)    :: sendbuf
   real(kind=CUSTOM_REAL), intent(inout) :: recvbuf
   integer                               :: ier
+
+  if (NUMBER_OF_SIMULTANEOUS_RUNS <= 1) then
+     recvbuf=sendbuf
+     return
+  endif
 
   call MPI_ALLREDUCE(sendbuf, recvbuf, countval, CUSTOM_MPI_TYPE, MPI_MAX, my_local_mpi_comm_for_bcast, ier)
 
 end subroutine max_all_all_cr_for_simulatenous_runs
-
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!-------------------------------------------------------------------------------------------------------------
+!
+!-------------------------------------------------------------------------------------------------------------
 subroutine min_all_all_cr_for_simulatenous_runs(sendbuf, recvbuf, countval)
 
   use my_mpi
   use constants, only: CUSTOM_REAL
+  use shared_parameters, only: NUMBER_OF_SIMULTANEOUS_RUNS
 
   implicit none
 
@@ -77,10 +100,18 @@ subroutine min_all_all_cr_for_simulatenous_runs(sendbuf, recvbuf, countval)
   real(kind=CUSTOM_REAL), intent(inout) :: recvbuf
   integer                               :: ier
 
+  if (NUMBER_OF_SIMULTANEOUS_RUNS <= 1) then
+     recvbuf=sendbuf
+     return
+  endif
+
   call MPI_ALLREDUCE(sendbuf, recvbuf, countval, CUSTOM_MPI_TYPE, MPI_MIN, my_local_mpi_comm_for_bcast, ier)
 
 end subroutine min_all_all_cr_for_simulatenous_runs
-
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!-------------------------------------------------------------------------------------------------------------
+!
+!-------------------------------------------------------------------------------------------------------------
 
 subroutine synchronize_all_world()
 
@@ -95,7 +126,10 @@ subroutine synchronize_all_world()
   if (ier /= 0 ) stop 'Error synchronize MPI processes'
 
 end subroutine synchronize_all_world
-
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!-------------------------------------------------------------------------------------------------------------
+!
+!-------------------------------------------------------------------------------------------------------------
 subroutine synchronize_for_bcast()
 
   use my_mpi
@@ -120,7 +154,10 @@ subroutine dummy_bcast(dummy_integer)
 
 
 end subroutine dummy_bcast
-
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!-------------------------------------------------------------------------------------------------------------
+!
+!-------------------------------------------------------------------------------------------------------------
 subroutine sum_all_all_cr_array(sendbuf, recvbuf, countval)
 
   use my_mpi

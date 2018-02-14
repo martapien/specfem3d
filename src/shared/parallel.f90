@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -1286,7 +1286,7 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine all_gather_all_i(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
+  subroutine gather_all_all_i(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
 
   use my_mpi
 
@@ -1302,7 +1302,7 @@ end module my_mpi
                      recvbuf,recvcount,MPI_INTEGER, &
                      my_local_mpi_comm_world,ier)
 
-  end subroutine all_gather_all_i
+  end subroutine gather_all_all_i
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -1373,23 +1373,31 @@ end module my_mpi
 
   end subroutine gather_all_dp
 
-  subroutine all_gather_all_dp(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
+!
+!-------------------------------------------------------------------------------------------------
+!
 
-  use my_mpi
+! unused so far...
+!
+!  subroutine gather_all_all_dp(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
+!
+!  use my_mpi
+!
+!  implicit none
+!
+!  integer :: sendcnt, recvcount, NPROC
+!  double precision, dimension(sendcnt) :: sendbuf
+!  double precision, dimension(recvcount,0:NPROC-1) :: recvbuf
+!
+!  integer :: ier
+!
+!  call MPI_ALLGATHER(sendbuf,sendcnt,MPI_DOUBLE_PRECISION, &
+!                  recvbuf,recvcount,MPI_DOUBLE_PRECISION, &
+!                  my_local_mpi_comm_world,ier)
+!
+!  end subroutine gather_all_all_dp
+!
 
-  implicit none
-
-  integer :: sendcnt, recvcount, NPROC
-  double precision, dimension(sendcnt) :: sendbuf
-  double precision, dimension(recvcount,0:NPROC-1) :: recvbuf
-
-  integer :: ier
-
-  call MPI_ALLGATHER(sendbuf,sendcnt,MPI_DOUBLE_PRECISION, &
-                  recvbuf,recvcount,MPI_DOUBLE_PRECISION, &
-                  my_local_mpi_comm_world,ier)
-
-  end subroutine all_gather_all_dp
 !
 !-------------------------------------------------------------------------------------------------
 !
@@ -1418,8 +1426,26 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
-!  subroutine gatherv_all_i(sendbuf, sendcnt, recvbuf, recvcount, recvoffset,recvcounttot, NPROC)
-!  end subroutine gatherv_all_i
+  subroutine gatherv_all_i(sendbuf, sendcnt, recvbuf, recvcount, recvoffset,recvcounttot, NPROC)
+
+  use my_mpi
+
+  implicit none
+
+  include "precision.h"
+
+  integer :: sendcnt,recvcounttot,NPROC
+  integer, dimension(NPROC) :: recvcount,recvoffset
+  integer, dimension(sendcnt) :: sendbuf
+  integer, dimension(recvcounttot) :: recvbuf
+
+  integer :: ier
+
+  call MPI_GATHERV(sendbuf,sendcnt,MPI_INTEGER,recvbuf,recvcount,recvoffset,MPI_INTEGER, &
+                   0,my_local_mpi_comm_world,ier)
+
+  end subroutine gatherv_all_i
+
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -1446,6 +1472,33 @@ end module my_mpi
                   0,my_local_mpi_comm_world,ier)
 
   end subroutine gatherv_all_cr
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+! not used yet...
+!  subroutine gatherv_all_dp(sendbuf, sendcnt, recvbuf, recvcount, recvoffset,recvcounttot, NPROC)
+!
+!  use my_mpi
+!  use constants, only: CUSTOM_REAL
+!
+!  implicit none
+!
+!  include "precision.h"
+!
+!  integer :: sendcnt,recvcounttot,NPROC
+!  integer, dimension(NPROC) :: recvcount,recvoffset
+!  double precision, dimension(sendcnt) :: sendbuf
+!  double precision, dimension(recvcounttot) :: recvbuf
+!
+!  integer :: ier
+!
+!  call MPI_GATHERV(sendbuf,sendcnt,MPI_DOUBLE_PRECISION, &
+!                  recvbuf,recvcount,recvoffset,MPI_DOUBLE_PRECISION, &
+!                  0,my_local_mpi_comm_world,ier)
+!
+!  end subroutine gatherv_all_dp
 
 !
 !-------------------------------------------------------------------------------------------------

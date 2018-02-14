@@ -41,7 +41,9 @@ meshfem3D_TARGETS = \
 	$(EMPTY_MACRO)
 
 meshfem3D_OBJECTS = \
+	$O/calc_gll_points.mesh.o \
 	$O/check_mesh_quality.mesh.o \
+	$O/chunk_earth_mesh_mod.mesh.o \
 	$O/compute_parameters.mesh.o \
 	$O/create_meshfem_mesh.mesh.o \
 	$O/create_CPML_regions.mesh.o \
@@ -50,12 +52,13 @@ meshfem3D_OBJECTS = \
 	$O/define_subregions.mesh.o \
 	$O/define_subregions_heuristic.mesh.o \
 	$O/define_superbrick.mesh.o \
+	$O/determine_cavity.mesh.o \
+	$O/earth_chunk.mesh.o \
 	$O/get_flags_boundaries.mesh.o \
 	$O/get_MPI_cutplanes_eta.mesh.o \
 	$O/get_MPI_cutplanes_xi.mesh.o \
 	$O/meshfem3D.mesh.o \
 	$O/meshfem3D_par.mesh.o \
-	$O/program_meshfem3D.mesh.o \
 	$O/read_mesh_parameter_file.mesh.o \
 	$O/read_value_mesh_parameters.mesh.o \
 	$O/save_databases.mesh.o \
@@ -66,6 +69,8 @@ meshfem3D_OBJECTS = \
 meshfem3D_MODULES = \
 	$(FC_MODDIR)/constants_meshfem3d.$(FC_MODEXT) \
 	$(FC_MODDIR)/meshfem3d_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/chunk_earth_mod.$(FC_MODEXT) \
+	$(FC_MODDIR)/create_meshfem_par.$(FC_MODEXT) \
 	$(EMPTY_MACRO)
 
 meshfem3D_SHARED_OBJECTS = \
@@ -146,11 +151,12 @@ $E/xmeshfem3D: $(XMESHFEM_OBJECTS)
 ###
 
 
-$O/meshfem3D.mesh.o: $O/meshfem3D_par.mesh.o
+$O/meshfem3D.mesh.o: $O/meshfem3D_par.mesh.o $O/chunk_earth_mesh_mod.mesh.o
 $O/create_meshfem_mesh.mesh.o: $O/meshfem3D_par.mesh.o
 $O/create_CPML_regions.mesh.o: $O/meshfem3D_par.mesh.o
 $O/create_interfaces_mesh.mesh.o: $O/meshfem3D_par.mesh.o
 $O/read_mesh_parameter_file.mesh.o: $O/meshfem3D_par.mesh.o
+$O/determine_cavity.mesh.o: $O/create_meshfem_mesh.mesh.o
 
 ## adios
 $O/meshfem3D_adios_stubs.mesh_noadios.o: $O/shared_par.shared_module.o $O/adios_manager_stubs.shared_noadios.o

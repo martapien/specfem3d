@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -32,16 +32,24 @@
                     max_interface_size_ext_mesh,ibool_interfaces_ext_mesh, &
                     SAVE_MESH_FILES,ANISOTROPY)
 
-  use generate_databases_par, only: nspec_cpml,CPML_width_x,CPML_width_y,CPML_width_z,CPML_to_spec, &
+  use generate_databases_par, only: NGLLX,NGLLY,NGLLZ,NGLLSQUARE,IMAIN,IOUT, &
+    nspec2D_xmin,nspec2D_xmax,nspec2D_ymin,nspec2D_ymax,NSPEC2D_BOTTOM,NSPEC2D_TOP, &
+    ibelm_xmin,ibelm_xmax,ibelm_ymin,ibelm_ymax,ibelm_bottom,ibelm_top, &
+    SIMULATION_TYPE,SAVE_FORWARD,mask_ibool_interior_domain, &
+    STACEY_ABSORBING_CONDITIONS,USE_MESH_COLORING_GPU
+
+  ! PML
+  use generate_databases_par, only: PML_CONDITIONS, &
+    nspec_cpml,CPML_width_x,CPML_width_y,CPML_width_z,CPML_to_spec, &
     CPML_regions,is_CPML,min_distance_between_CPML_parameter,nspec_cpml_tot, &
     d_store_x,d_store_y,d_store_z,k_store_x,k_store_y,k_store_z, &
     alpha_store_x,alpha_store_y,alpha_store_z, &
-    nspec2D_xmin,nspec2D_xmax,nspec2D_ymin,nspec2D_ymax,NSPEC2D_BOTTOM,NSPEC2D_TOP, &
-    ibelm_xmin,ibelm_xmax,ibelm_ymin,ibelm_ymax,ibelm_bottom,ibelm_top,PML_CONDITIONS, &
-    SIMULATION_TYPE,SAVE_FORWARD,mask_ibool_interior_domain, &
     nglob_interface_PML_acoustic,points_interface_PML_acoustic, &
-    nglob_interface_PML_elastic,points_interface_PML_elastic, &
-    STACEY_ABSORBING_CONDITIONS,NGLLX,NGLLY,NGLLZ,NGLLSQUARE,IMAIN,IOUT,USE_MESH_COLORING_GPU
+    nglob_interface_PML_elastic,points_interface_PML_elastic
+
+  ! mesh surface
+  use generate_databases_par, only: ispec_is_surface_external_mesh,iglob_is_surface_external_mesh, &
+    nfaces_surface
 
   use create_regions_mesh_ext_par
 
@@ -317,6 +325,11 @@
     endif
   endif
 
+  ! surface points
+  write(IOUT) nfaces_surface
+  write(IOUT) ispec_is_surface_external_mesh
+  write(IOUT) iglob_is_surface_external_mesh
+
   close(IOUT)
 
   ! stores arrays in binary files
@@ -370,15 +383,19 @@
 !
   subroutine save_arrays_solver_files(nspec,nglob,ibool)
 
-  !! MPC for instaseis input
+ !! MPC for instaseis input
   use HDF5
 
   use generate_databases_par, only: myrank, sizeprocs, &
         NGLLX,NGLLY,NGLLZ,NGLLSQUARE,IMAIN,IOUT,FOUR_THIRDS
 
+  ! MPI interfaces
+  use generate_databases_par, only: nibool_interfaces_ext_mesh,ibool_interfaces_ext_mesh,num_interfaces_ext_mesh
+
+  
   use create_regions_mesh_ext_par
 
-  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH, &
+  use shared_parameters, only: NPROC, COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH, &
     INJECTION_TECHNIQUE_TYPE, INJECTION_TECHNIQUE_IS_INSTASEIS, NSTEP
 
   implicit none
@@ -390,12 +407,14 @@
   ! local parameters
   real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: v_tmp
   integer,dimension(:),allocatable :: v_tmp_i
-  integer :: ier,i
+  integer :: ier,i,j,k
   integer, dimension(:), allocatable :: iglob_tmp
-  integer :: iface, igll,  ispec, iglob, j, k, inum
-  ! real(kind=CUSTOM_REAL) :: nx,ny,nz
+  integer :: iface, igll, ispec, iglob, inum, num_points
+  real(kind=CUSTOM_REAL) :: nx,ny,nz
   character(len=MAX_STRING_LEN) :: filename
 
+  !----------------------------------------------------------------------
+  ! mostly for free-surface and coupling surfaces
   logical,parameter :: SAVE_MESH_FILES_ADDITIONAL = .true.
 
 
@@ -630,12 +649,13 @@
     ! acoustic-elastic domains
     if (ACOUSTIC_SIMULATION .and. ELASTIC_SIMULATION) then
       ! saves points on acoustic-elastic coupling interface
-      allocate( iglob_tmp(NGLLSQUARE*num_coupling_ac_el_faces),stat=ier)
+      num_points = NGLLSQUARE*num_coupling_ac_el_faces
+      allocate( iglob_tmp(num_points),stat=ier)
       if (ier /= 0) stop 'error allocating array iglob_tmp'
       inum = 0
       iglob_tmp(:) = 0
-      do i=1,num_coupling_ac_el_faces
-        do j=1,NGLLSQUARE
+      do i = 1,num_coupling_ac_el_faces
+        do j = 1,NGLLSQUARE
           inum = inum+1
           iglob_tmp(inum) = ibool(coupling_ac_el_ijk(1,j,i), &
                                   coupling_ac_el_ijk(2,j,i), &
@@ -644,15 +664,13 @@
         enddo
       enddo
       filename = prname(1:len_trim(prname))//'coupling_acoustic_elastic'
-      call write_VTK_data_points(nglob, &
-                        xstore_dummy,ystore_dummy,zstore_dummy, &
-                        iglob_tmp,NGLLSQUARE*num_coupling_ac_el_faces, &
-                        filename)
+      call write_VTK_data_points(nglob,xstore_dummy,ystore_dummy,zstore_dummy, &
+                                 iglob_tmp,num_points,filename)
 
       ! saves acoustic/elastic flag
       allocate(v_tmp_i(nspec),stat=ier)
       if (ier /= 0) stop 'error allocating array v_tmp_i'
-      do i=1,nspec
+      do i = 1,nspec
         if (ispec_is_acoustic(i)) then
           v_tmp_i(i) = 1
         else if (ispec_is_elastic(i)) then
@@ -662,9 +680,8 @@
         endif
       enddo
       filename = prname(1:len_trim(prname))//'acoustic_elastic_flag'
-      call write_VTK_data_elem_i(nspec,nglob, &
-                        xstore_dummy,ystore_dummy,zstore_dummy,ibool, &
-                        v_tmp_i,filename)
+      call write_VTK_data_elem_i(nspec,nglob,xstore_dummy,ystore_dummy,zstore_dummy,ibool, &
+                                 v_tmp_i,filename)
 
       deallocate(iglob_tmp,v_tmp_i)
     endif !if (ACOUSTIC_SIMULATION .and. ELASTIC_SIMULATION )
@@ -672,12 +689,13 @@
     ! acoustic-poroelastic domains
     if (ACOUSTIC_SIMULATION .and. POROELASTIC_SIMULATION) then
       ! saves points on acoustic-poroelastic coupling interface
-      allocate( iglob_tmp(NGLLSQUARE*num_coupling_ac_po_faces),stat=ier)
+      num_points = NGLLSQUARE*num_coupling_ac_po_faces
+      allocate( iglob_tmp(num_points),stat=ier)
       if (ier /= 0) stop 'error allocating array iglob_tmp'
       inum = 0
       iglob_tmp(:) = 0
-      do i=1,num_coupling_ac_po_faces
-        do j=1,NGLLSQUARE
+      do i = 1,num_coupling_ac_po_faces
+        do j = 1,NGLLSQUARE
           inum = inum+1
           iglob_tmp(inum) = ibool(coupling_ac_po_ijk(1,j,i), &
                                   coupling_ac_po_ijk(2,j,i), &
@@ -686,15 +704,13 @@
         enddo
       enddo
       filename = prname(1:len_trim(prname))//'coupling_acoustic_poroelastic'
-      call write_VTK_data_points(nglob, &
-                        xstore_dummy,ystore_dummy,zstore_dummy, &
-                        iglob_tmp,NGLLSQUARE*num_coupling_ac_po_faces, &
-                        filename)
+      call write_VTK_data_points(nglob,xstore_dummy,ystore_dummy,zstore_dummy, &
+                                 iglob_tmp,num_points,filename)
 
       ! saves acoustic/poroelastic flag
       allocate(v_tmp_i(nspec),stat=ier)
       if (ier /= 0) stop 'error allocating array v_tmp_i'
-      do i=1,nspec
+      do i = 1,nspec
         if (ispec_is_acoustic(i)) then
           v_tmp_i(i) = 1
         else if (ispec_is_poroelastic(i)) then
@@ -704,9 +720,8 @@
         endif
       enddo
       filename = prname(1:len_trim(prname))//'acoustic_poroelastic_flag'
-      call write_VTK_data_elem_i(nspec,nglob, &
-                        xstore_dummy,ystore_dummy,zstore_dummy,ibool, &
-                        v_tmp_i,filename)
+      call write_VTK_data_elem_i(nspec,nglob,xstore_dummy,ystore_dummy,zstore_dummy,ibool, &
+                                 v_tmp_i,filename)
 
       deallocate(v_tmp_i,iglob_tmp)
     endif !if (ACOUSTIC_SIMULATION .and. POROELASTIC_SIMULATION )
@@ -714,12 +729,13 @@
     ! elastic-poroelastic domains
     if (ELASTIC_SIMULATION .and. POROELASTIC_SIMULATION) then
       ! saves points on elastic-poroelastic coupling interface
-      allocate( iglob_tmp(NGLLSQUARE*num_coupling_el_po_faces),stat=ier)
+      num_points = NGLLSQUARE*num_coupling_el_po_faces
+      allocate( iglob_tmp(num_points),stat=ier)
       if (ier /= 0) stop 'error allocating array iglob_tmp'
       inum = 0
       iglob_tmp(:) = 0
-      do i=1,num_coupling_el_po_faces
-        do j=1,NGLLSQUARE
+      do i = 1,num_coupling_el_po_faces
+        do j = 1,NGLLSQUARE
           inum = inum+1
           iglob_tmp(inum) = ibool(coupling_el_po_ijk(1,j,i), &
                                   coupling_el_po_ijk(2,j,i), &
@@ -728,10 +744,8 @@
         enddo
       enddo
       filename = prname(1:len_trim(prname))//'coupling_elastic_poroelastic'
-      call write_VTK_data_points(nglob, &
-                        xstore_dummy,ystore_dummy,zstore_dummy, &
-                        iglob_tmp,NGLLSQUARE*num_coupling_el_po_faces, &
-                        filename)
+      call write_VTK_data_points(nglob,xstore_dummy,ystore_dummy,zstore_dummy, &
+                                 iglob_tmp,num_points,filename)
 
       ! saves elastic/poroelastic flag
       allocate(v_tmp_i(nspec),stat=ier)
@@ -746,13 +760,32 @@
         endif
       enddo
       filename = prname(1:len_trim(prname))//'elastic_poroelastic_flag'
-      call write_VTK_data_elem_i(nspec,nglob, &
-                        xstore_dummy,ystore_dummy,zstore_dummy,ibool, &
-                        v_tmp_i,filename)
+      call write_VTK_data_elem_i(nspec,nglob,xstore_dummy,ystore_dummy,zstore_dummy,ibool, &
+                                 v_tmp_i,filename)
 
       deallocate(v_tmp_i,iglob_tmp)
     endif !if (ACOUSTIC_SIMULATION .and. POROELASTIC_SIMULATION
 
+    ! MPI
+    if (NPROC > 1) then
+      ! saves MPI interface points
+      num_points = sum(nibool_interfaces_ext_mesh(1:num_interfaces_ext_mesh))
+      allocate( iglob_tmp(num_points),stat=ier)
+      if (ier /= 0) stop 'error allocating array iglob_tmp'
+      inum = 0
+      iglob_tmp(:) = 0
+      do i = 1,num_interfaces_ext_mesh
+        do j = 1, nibool_interfaces_ext_mesh(i)
+          inum = inum + 1
+          iglob_tmp(inum) = ibool_interfaces_ext_mesh(j,i)
+        enddo
+      enddo
+
+      filename = prname(1:len_trim(prname))//'MPI_points'
+      call write_VTK_data_points(nglob,xstore_dummy,ystore_dummy,zstore_dummy, &
+                                 iglob_tmp,num_points,filename)
+      deallocate(iglob_tmp)
+    endif ! NPROC > 1
   endif  !if (SAVE_MESH_FILES_ADDITIONAL)
 
   if (COUPLE_WITH_INJECTION_TECHNIQUE .or. MESH_A_CHUNK_OF_THE_EARTH) then
@@ -773,56 +806,12 @@
     write(IOUT) ispec_is_elastic
     close(IOUT)
 
-    !! MPC GLL points in local coordinates,kappa, mu and rho
-
-    nb_gll_myrank = 0
-    do iface = 1,num_abs_boundary_faces
-       ispec = abs_boundary_ispec(iface)
-       if (ispec_is_elastic(ispec)) then
-          do igll = 1,NGLLSQUARE
-             nb_gll_myrank = nb_gll_myrank + 1
-          enddo
-       endif
-    enddo
-
-    allocate(nb_gll_per_proc(sizeprocs))
-    allocate(offset_per_proc(sizeprocs))
-
-    call synchronize_all()
-
-    if (myrank > 0) then
-      call send_i_t(nb_gll_myrank,1,0)
-    else
-      nb_gll_per_proc(1) = nb_gll_myrank
-      do i=2, sizeprocs
-        call recv_i_t(nb_gll_per_proc(i),1,i-1)
-      enddo
-
-      offset_per_proc(1) = 0
-      do i=2, sizeprocs
-        offset_per_proc(i) = sum(nb_gll_per_proc(1:i-1))
-      enddo
-    endif  !! myrank > 0
-    call bcast_all_i(nb_gll_per_proc, sizeprocs)
-    call bcast_all_i(offset_per_proc, sizeprocs)
-
-
-    call synchronize_all()
-
-    allocate(coords_buf(3, nb_gll_per_proc(myrank+1)))
-    allocate(normals_buf(3, nb_gll_per_proc(myrank+1)))
-    allocate(kappa_buf(nb_gll_per_proc(myrank+1)))
-    allocate(mu_buf(nb_gll_per_proc(myrank+1)))
-    allocate(rho_buf(nb_gll_per_proc(myrank+1)))
-
     !! VM VM write an ascii file for instaseis input
     filename = prname(1:len_trim(prname))//'normal.txt'
     open(IOUT,file=filename(1:len_trim(filename)),status='unknown',iostat=ier)
     write(IOUT, *) ' number of points :', num_abs_boundary_faces*NGLLSQUARE
 
-
-    ipoint = 0
-    do iface = 1, num_abs_boundary_faces
+    do iface = 1,num_abs_boundary_faces
        ispec = abs_boundary_ispec(iface)
        if (ispec_is_elastic(ispec)) then
           do igll = 1,NGLLSQUARE
@@ -831,6 +820,7 @@
              i = abs_boundary_ijk(1,igll,iface)
              j = abs_boundary_ijk(2,igll,iface)
              k = abs_boundary_ijk(3,igll,iface)
+
              iglob = ibool(i,j,k,ispec)
              ipoint = ipoint + 1
 
@@ -1028,3 +1018,4 @@
   endif ! (COUPLE_WITH_INJECTION_TECHNIQUE .or. MESH_A_CHUNK_OF_THE_EARTH)
 
   end subroutine save_arrays_solver_files
+

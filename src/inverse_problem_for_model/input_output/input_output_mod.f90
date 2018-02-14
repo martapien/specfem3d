@@ -44,7 +44,7 @@ module input_output
   use mesh_tools
   use IO_model
   use Teleseismic_IO_mod
-
+  use rotations_mod
   implicit none
 
   PUBLIC  :: init_input_output_mod, SetUpInversion, get_mode_running, dump_adjoint_sources, write_bin_sismo_on_disk, &
@@ -54,10 +54,12 @@ module input_output
              get_stations, read_data_gather, create_name_database_inversion, read_and_distribute_events_for_simultaneous_runs
 
   !! DEFINITION OF PRIVATE VARIABLES
-  integer,                PRIVATE                                   :: NEVENT, NIFRQ
+  integer,                PRIVATE                                   :: NEVENT, NIFRQ, ncomp_read, ncomp_inv
   real(kind=CUSTOM_REAL), PRIVATE, dimension(:), allocatable        :: fl, fh
   real(kind=CUSTOM_REAL), PRIVATE                                   :: nb_traces_tot
   logical,                PRIVATE                                   :: use_band_pass_filter
+  logical, dimension(8) :: is_component_read, is_component_inv
+  integer, dimension(8) :: id_component_read, id_component_inv
 contains
 
 !################################## ROUTINES THAT CAN BE CALLED FROM MAIN  #########################################################
@@ -79,6 +81,7 @@ contains
     real(kind=CUSTOM_REAL)                                         :: elemsize_min_glob,elemsize_max_glob
     real(kind=CUSTOM_REAL)                                         :: distance_min_glob,distance_max_glob
 
+
     if (myrank == 0) then
        write(INVERSE_LOG_FILE,*)
        write(INVERSE_LOG_FILE,*) '          *********************************************'
@@ -99,7 +102,6 @@ contains
 
     !! select input file that we want to read ----------------------------------------
     select case(trim(adjustl(type_input)))
-
     case('exploration')
 
        call read_acqui_file(acqui_file, acqui_simu, myrank)
@@ -131,8 +133,16 @@ contains
 
     !! not need to read data for only forward simulation
     if (.not. inversion_param%only_forward) then
-       call read_data_gather(acqui_simu, myrank)
-       inversion_param%nb_traces_tot=nb_traces_tot
+
+       select case (trim(adjustl(type_input)))
+       case('teleseismic')
+          call read_pif_data_gather(acqui_simu, inversion_param, myrank)
+          inversion_param%nb_traces_tot=nb_traces_tot
+       case default
+          call read_data_gather(acqui_simu, myrank)
+          inversion_param%nb_traces_tot=nb_traces_tot
+       end select
+
     endif
 
     !! create name for outputs
@@ -672,7 +682,10 @@ contains
 
     nb_traces_tot=0.
 
-    if (myrank == 0) write(INVERSE_LOG_FILE,'(/a17)') '... reading data '
+    if (myrank == 0) then
+       write(INVERSE_LOG_FILE,*)
+       write(INVERSE_LOG_FILE,*) '     READING data'
+    endif
 
     do ievent = 1, acqui_simu(1)%nevent_tot
 
@@ -704,8 +717,9 @@ contains
           NSTA_LOC=acqui_simu(ievent)%nsta_slice
           allocate(acqui_simu(ievent)%data_traces(NSTA_LOC,Nt,NDIM))
           allocate(acqui_simu(ievent)%adjoint_sources(NDIM, NSTA_LOC, Nt))
-          allocate(acqui_simu(ievent)%weight_trace(NDIM, NSTA_LOC))
-          acqui_simu(ievent)%weight_trace(:,:)=1._CUSTOM_REAL
+          !! SB SB here weight_trace is allocated with nt = 1
+          allocate(acqui_simu(ievent)%weight_trace(NDIM, NSTA_LOC, 1))
+          acqui_simu(ievent)%weight_trace(:,:,:)=1._CUSTOM_REAL
           if (VERBOSE_MODE .or. DEBUG_MODE)  allocate(acqui_simu(ievent)%synt_traces(NDIM, NSTA_LOC, Nt))
 
           irec_local=0
@@ -752,7 +766,271 @@ contains
                 NSTA_LOC=acqui_simu(ievent)%nsta_slice
                 Nt=acqui_simu(ievent)%Nt_data
                 allocate(Gather_loc(NSTA_LOC,Nt,NDIM),acqui_simu(ievent)%data_traces(NSTA_LOC,Nt,NDIM), &
-                     acqui_simu(ievent)%adjoint_sources(NDIM, NSTA_LOC, Nt), acqui_simu(ievent)%weight_trace(NDIM, NSTA_LOC))
+                     acqui_simu(ievent)%adjoint_sources(NDIM, NSTA_LOC, Nt), acqui_simu(ievent)%weight_trace(NDIM, NSTA_LOC,1))
+                if (VERBOSE_MODE .or. DEBUG_MODE) allocate(acqui_simu(ievent)%synt_traces(NDIM, NSTA_LOC, Nt))
+
+                if (DEBUG_MODE) write(IIDD,*) 'myrank ',myrank,' wait for 0 :', NSTA_LOC,Nt
+                tag   = MPI_ANY_TAG
+                call MPI_RECV(Gather_loc,Nt*NSTA_LOC*NDIM,CUSTOM_MPI_TYPE, 0, tag, my_local_mpi_comm_world, status,  ier)
+                !! store in acqui_simu
+                acqui_simu(ievent)%data_traces(:,:,:)=Gather_loc(:,:,:)
+                deallocate(Gather_loc)
+             endif
+
+          endif
+
+
+       enddo
+
+       if (myrank == 0) deallocate(Gather)
+
+       call synchronize_all()
+
+       !! set other parameters (in futrue work need to read any additional files)
+
+       !! set frequency to invert
+       !!acqui_simu(ievent)%freqcy_to_invert(:,1,:)=fl
+       !!acqui_simu(ievent)%freqcy_to_invert(:,2,:)=fh
+
+       !! get band pass filter values if needed
+       if ( use_band_pass_filter) then
+          acqui_simu(ievent)%Nfrq=NIFRQ
+          acqui_simu(ievent)%band_pass_filter=use_band_pass_filter
+          allocate(acqui_simu(ievent)%fl_event(acqui_simu(ievent)%Nfrq))
+          allocate(acqui_simu(ievent)%fh_event(acqui_simu(ievent)%Nfrq))
+          acqui_simu(ievent)%fl_event(:)=fl(:)
+          acqui_simu(ievent)%fh_event(:)=fh(:)
+          !! WARNING WARNING
+          !! this is for telesismic case for now only one
+          !! frequency is allowed (todo fix it)
+          acqui_simu(ievent)%freqcy_to_invert(:,1,:)=fl(1)
+          acqui_simu(ievent)%freqcy_to_invert(:,2,:)=fh(1)
+       endif
+
+    enddo
+
+    call MPI_BCAST(nb_traces_tot,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
+    dummy_real=nb_traces_tot
+    call sum_all_all_cr_for_simulatenous_runs(dummy_real,nb_traces_tot,1)
+
+    if (myrank == 0) write(INVERSE_LOG_FILE,*) '     READING data passed '
+
+  end subroutine read_data_gather
+
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!----------------------------------------------------------------
+! master read waveform data gather and bcast to MPI slice concerned
+!----------------------------------------------------------------
+  subroutine read_pif_data_gather(acqui_simu, inversion_param, myrank)
+
+    use my_mpi             !! module from specfem
+    include "precision.h"  !! from specfem
+
+    integer,                                     intent(in)    :: myrank
+    type(acqui),  dimension(:), allocatable,     intent(inout) :: acqui_simu
+    type(inver),                                 intent(inout) :: inversion_param
+
+    integer                                                    :: ievent, idim, NSTA, NSTA_LOC, Nt, irec, irec_local
+    integer                                                    :: tag, ier, nsta_irank, irank
+    real(kind=CUSTOM_REAL), dimension(:,:,:), allocatable      :: Gather, Gather_loc
+    real(kind=CUSTOM_REAL), dimension(:),     allocatable      :: weight_loc
+    integer                                                    :: status(MPI_STATUS_SIZE)
+    real(kind=CUSTOM_REAL)                                     :: dummy_real, W
+    character(len=MAX_LEN_STRING)                              :: filename
+    logical                                                    :: data_comp_inv, data_comp_read
+    character(len=1)                                           :: data_type_inv, data_type_read
+    character(len=3)                                           :: data_sys_inv, data_sys_read
+    integer                                                    :: it1, it2, it3, it4
+    double precision                                           :: lat0, lon0, azi0
+
+    nb_traces_tot=0
+
+    if (myrank == 0) write(INVERSE_LOG_FILE,'(/a17)') '... reading data '
+
+    do ievent = 1, acqui_simu(1)%nevent_tot
+
+       lat0 = acqui_simu(ievent)%Origin_chunk_lat
+       lon0 = acqui_simu(ievent)%Origin_chunk_lon
+       azi0 = acqui_simu(ievent)%Origin_chunk_azi
+
+       if (myrank == 0) then
+
+          NSTA=acqui_simu(ievent)%nsta_tot
+          Nt=acqui_simu(ievent)%Nt_data
+
+          allocate(Gather(NSTA,Nt,NDIM))
+          Gather(:,:,:) = 0._CUSTOM_REAL
+
+          !! Read pif gather file component by conponent
+          ncomp_read = 0
+          data_type_read = acqui_simu(ievent)%read_data_type
+          do idim=1,NDIM
+
+             ! Check type of data
+             data_sys_read  = acqui_simu(ievent)%read_data_sys(idim:idim)
+             data_comp_read  = acqui_simu(ievent)%read_data_comp(idim)
+
+             write(filename,*)trim(acqui_simu(ievent)%event_rep),'/fsismo_', &
+                  trim(adjustl(data_type_read)),trim(adjustl(data_sys_read)),'.bin'
+
+             ! Read data
+             if (data_comp_read) then
+                call read_binary_data(filename, nsta, nt, gather(:,:,idim))
+                nb_traces_tot = nb_traces_tot + nsta
+                ncomp_read = ncomp_read +1
+             endif
+
+          enddo
+
+          !! store data gather in my slice if needed
+          NSTA_LOC=acqui_simu(ievent)%nsta_slice
+          allocate(acqui_simu(ievent)%data_traces(ndim,nsta_loc,nt))
+          allocate(acqui_simu(ievent)%adjoint_sources(ndim,nsta_loc,nt))
+          allocate(acqui_simu(ievent)%weight_trace(ndim,nsta_loc,nt))
+          acqui_simu(ievent)%weight_trace(:,:,:) = 1._CUSTOM_REAL
+
+          !! manage data taper here
+          ! first windowing
+          if (acqui_simu(ievent)%is_time_pick) then
+             allocate(weight_loc(nt))
+             do irec = 1, nsta
+                weight_loc(:) = 1._CUSTOM_REAL
+                it1 = int(floor(acqui_simu(ievent)%time_pick(irec) / acqui_simu(ievent)%dt_data ))
+                it2 = int(floor((acqui_simu(ievent)%time_pick(irec) &
+                     -acqui_simu(ievent)%time_before_pick) &
+                     / acqui_simu(ievent)%dt_data))
+                it3 = int(ceiling((acqui_simu(ievent)%time_pick(irec) &
+                     + acqui_simu(ievent)%time_after_pick) &
+                     / acqui_simu(ievent)%dt_data))
+                it4 = int(ceiling((acqui_simu(ievent)%time_pick(irec) &
+                     + acqui_simu(ievent)%time_after_pick &
+                     + acqui_simu(ievent)%time_before_pick) /  acqui_simu(ievent)%dt_data))
+                call taper_window_W(weight_loc,it1,it2,it3,it4,nt,W)
+                do idim=1,ndim
+                   acqui_simu(ievent)%weight_trace(idim,irec,:) = weight_loc(:)
+                enddo
+             enddo
+          endif
+
+          ! then gradient weighting
+          if (inversion_param%is_src_weigh_gradient) then ! we take the maximum value of gather
+             acqui_simu(ievent)%weight_trace(:,:,:) = 1._CUSTOM_REAL / maxval(abs(gather))
+          else
+             acqui_simu(ievent)%weight_trace(:,:,:) = 1._CUSTOM_REAL
+          endif
+
+          ! manage inverted data (use weight_trace to select wich parameter)
+          ncomp_inv = 0
+          data_type_inv = inversion_param%inverted_data_type
+          if (data_type_inv /= data_type_read) then
+             write(6,*)'CATASTROPHIC ERROR'
+             write(6,*)'requested type of inverted data is different from observed data'
+             write(6,*)'integration of differentiation of observed not implemented yet'
+             write(6,*)'NOW STOP'
+             stop
+          endif
+          if (data_type_inv == 'd') inversion_param%get_synthetic_displacement = .true.
+          if (data_type_inv == 'v') inversion_param%get_synthetic_velocity     = .true.
+          if (data_type_inv == 'a') inversion_param%get_synthetic_acceleration = .true.
+          if (data_type_inv == 'p') inversion_param%get_synthetic_pressure     = .true.
+
+          ! mute non_inverted data
+          do idim=1,ndim
+
+             ! Check type of data
+             data_sys_inv  = inversion_param%inverted_data_sys(idim:idim)
+             data_comp_inv = inversion_param%inverted_data_comp(idim)
+
+             if (.not. data_comp_inv) then
+                acqui_simu(ievent)%weight_trace(idim,:,:) = 0._CUSTOM_REAL
+             endif
+
+          enddo
+
+          ! pass from data system to local mesh
+          select case (acqui_simu(ievent)%read_data_sys)
+          case ('xyz')
+             ! nothing to do
+          case('enz')
+             ! Data are in standard coordinate system
+             ! Data rotation required to pass in mesh system (zen -> xyz)
+             call define_mesh_rotation_matrix(lat0,lon0,azi0)
+             call rotate_comp_glob2mesh(gather(:,:,3), gather(:,:,2), gather(:,:,1), &
+                  acqui_simu(ievent)%read_station_position(1,:), &
+                  acqui_simu(ievent)%read_station_position(2,:), &
+                  nt, nsta, gather(:,:,1), gather(:,:,2), gather(:,:,3))
+          case('rtz')
+             ! Data are in the souce receiver coordinate system
+             ! Data rotation required (baz-azi) (rtz -> zne)
+             call rotate_ZRT_to_ZNE(gather(:,:,3), gather(:,:,1), gather(:,:,2), &
+                  gather(:,:,3), gather(:,:,2), gather(:,:,1), &
+                  nsta,nt,acqui_simu(ievent)%baz)
+             ! Data rotation required to pass in mesh system (zen -> xyz)
+             call define_mesh_rotation_matrix(lat0, lon0, azi0)
+             call rotate_comp_glob2mesh(gather(:,:,3), gather(:,:,2), gather(:,:,1), &
+                  acqui_simu(ievent)%read_station_position(1,:), &
+                  acqui_simu(ievent)%read_station_position(2,:), &
+                  nt, nsta, gather(:,:,1), gather(:,:,2), gather(:,:,3))
+          case('qtl')
+             !! Data are in the ray coordinate system
+             !! Data rotation required (baz-azi and incidence angle) (rtz -> zen)
+             !call rotate_LQT_to_ZNE(vl,vq,vt,vz,vn,ve,nrec,nt,bazi,inci)
+             !
+             !! Data rotation required to pass in mesh system (zen -> xyz)
+             !call define_mesh_rotation_matrix(lat0,lon0,azi0)
+             !call rotate_comp_glob2mesh(vz2, vn, ve, stalat, stalon, nt, nsta, vx, vy, vz)
+             write(6,*)'CATASTROPHIC ERROR'
+             write(6,*)'qtl is not implemented yet'
+             write(6,*)'NOW STOP'
+             stop
+          end select
+
+          if (VERBOSE_MODE .or. DEBUG_MODE)  allocate(acqui_simu(ievent)%synt_traces(NDIM, NSTA_LOC, Nt))
+          irec_local=0
+          do irec = 1, NSTA
+             if (acqui_simu(ievent)%islice_selected_rec(irec) == myrank) then
+                irec_local=irec_local+1
+                acqui_simu(ievent)%data_traces(irec_local,:,:)=Gather(irec, :, :)
+             endif
+          enddo
+       endif
+
+       ! send gather to other MPI slices
+       do irank = 1, NPROC-1
+
+          if (myrank == 0) then !! then send
+
+             ! count the receiver in slice irank
+             nsta_irank=0
+             do irec = 1,  NSTA
+                if (acqui_simu(ievent)%islice_selected_rec(irec) == irank) nsta_irank = nsta_irank + 1
+             enddo
+
+             ! if there is receiver in slice irank then MPI send data
+             if (nsta_irank > 0) then
+                allocate(Gather_loc(nsta_irank,Nt,NDIM))  !! data to send
+                irec_local=0
+                do irec = 1, NSTA
+                   if (acqui_simu(ievent)%islice_selected_rec(irec) == irank) then
+                      irec_local = irec_local + 1
+                      Gather_loc(irec_local, :, :) = Gather(irec, :, :) !! store data to send
+                   endif
+                enddo
+                if (DEBUG_MODE) write(IIDD,*) 'myrank ', myrank , 'send to ', irank, ' :' , nsta_irank, Nt
+                tag    = 2001
+                call MPI_SEND(Gather_loc, Nt*nsta_irank*NDIM, CUSTOM_MPI_TYPE, irank, tag, my_local_mpi_comm_world, ier)
+
+                deallocate(Gather_loc)
+
+             endif
+
+          else !! then receive gather
+
+             if (myrank == irank .and. acqui_simu(ievent)%nsta_slice > 0) then
+                NSTA_LOC=acqui_simu(ievent)%nsta_slice
+                Nt=acqui_simu(ievent)%Nt_data
+                allocate(Gather_loc(NSTA_LOC,Nt,NDIM),acqui_simu(ievent)%data_traces(NSTA_LOC,Nt,NDIM), &
+                     acqui_simu(ievent)%adjoint_sources(NDIM, NSTA_LOC, Nt), acqui_simu(ievent)%weight_trace(NDIM, NSTA_LOC,nt))
                 if (VERBOSE_MODE .or. DEBUG_MODE) allocate(acqui_simu(ievent)%synt_traces(NDIM, NSTA_LOC, Nt))
 
                 if (DEBUG_MODE) write(IIDD,*) 'myrank ',myrank,' wait for 0 :', NSTA_LOC,Nt
@@ -801,7 +1079,192 @@ contains
 
     if (myrank == 0) write(INVERSE_LOG_FILE,'(a25//)') '... reading data : passed'
 
-  end subroutine read_data_gather
+  end subroutine read_pif_data_gather
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!!! WARNING TO BE CONSISTENT I UED NAME FILE TO WRITE TO CHOOSE BETWENN DATA AND ADJOINT SOURCES
+    subroutine write_pif_data_gather(ievent, acqui_simu, inversion_param, array_to_write, name_file_to_write, myrank)
+
+    use my_mpi             !! module from specfem
+    include "precision.h"  !! from specfem
+
+    integer,                                                intent(in)    :: myrank, ievent
+    character(len=MAX_LEN_STRING)                                         :: filename
+    real(kind=CUSTOM_REAL),  dimension(:,:,:), allocatable, intent(in)    :: array_to_write
+    type(acqui),             dimension(:),     allocatable, intent(inout) :: acqui_simu
+    character(len=MAX_LEN_STRING),                          intent(in)    :: name_file_to_write
+    type(inver),                                               intent(in) :: inversion_param
+
+    integer                                                               :: idim, NSTA, NSTA_LOC, Nt, irec, irec_local
+    integer                                                               :: tag, ier, nsta_irank, irank, icomp
+    real(kind=CUSTOM_REAL), dimension(:,:,:), allocatable                 :: Gather, Gather_loc
+    integer,                dimension(:),     allocatable                 :: irec_global
+    integer                                                               :: status(MPI_STATUS_SIZE)
+    double precision                                           :: lat0, lon0, azi0
+
+    character(len=1)                                           :: data_type
+    logical                                                    :: data_comp
+    character(len=3)                                           :: data_sys
+
+    lat0 = acqui_simu(ievent)%Origin_chunk_lat
+    lon0 = acqui_simu(ievent)%Origin_chunk_lon
+    azi0 = acqui_simu(ievent)%Origin_chunk_azi
+
+     if (myrank == 0) then
+        NSTA=acqui_simu(ievent)%nsta_tot
+        Nt=acqui_simu(ievent)%Nt_data
+        allocate(Gather(NSTA,Nt,NDIM))
+     endif
+      ! not sure if need this sync
+        call synchronize_all()
+     do irank = 1, NPROC-1
+
+        if (myrank == 0) then
+           ! count the receiver in slice irank
+           nsta_irank=0
+           do irec = 1,  NSTA
+              if (acqui_simu(ievent)%islice_selected_rec(irec) == irank) nsta_irank = nsta_irank + 1
+           enddo
+           if (nsta_irank > 0) then
+              allocate(Gather_loc(nsta_irank,Nt,NDIM))  !! data to receive
+              allocate(irec_global(nsta_irank))
+              irec_local=0
+              tag   = MPI_ANY_TAG
+              call MPI_RECV(Gather_loc, Nt*nsta_irank*NDIM, CUSTOM_MPI_TYPE, irank, tag, my_local_mpi_comm_world, status,  ier)
+              call MPI_RECV(irec_global, nsta_irank, MPI_INTEGER, irank, tag, my_local_mpi_comm_world, status,  ier)
+              do icomp=1,NDIM
+                 do irec_local = 1, nsta_irank
+                    Gather(irec_global(irec_local), :, icomp) = Gather_loc(irec_local, :, icomp)
+                 enddo
+              enddo
+
+              deallocate(Gather_loc)
+              deallocate(irec_global)
+           endif
+        else
+           if (myrank == irank .and. acqui_simu(ievent)%nsta_slice > 0) then
+              NSTA_LOC=acqui_simu(ievent)%nsta_slice
+              Nt=acqui_simu(ievent)%Nt_data
+              allocate(Gather_loc(NSTA_LOC,Nt,NDIM))
+              allocate(irec_global(NSTA_LOC))
+
+              do irec_local = 1, NSTA_LOC
+                 irec_global(irec_local) = acqui_simu(ievent)%number_receiver_global(irec_local)
+                 !! choose the rigth seismograms_*
+                 do icomp=1,NDIM
+                       Gather_loc(irec_local,:,icomp)=array_to_write(icomp,irec_local,:)
+                 enddo
+              enddo
+
+              tag    = 2001
+              call MPI_SEND(Gather_loc,  Nt*NSTA_LOC*NDIM, CUSTOM_MPI_TYPE, 0, tag, my_local_mpi_comm_world, ier)
+              call MPI_SEND(irec_global, NSTA_LOC, CUSTOM_MPI_TYPE, 0, tag, my_local_mpi_comm_world, ier)
+              deallocate(Gather_loc)
+              deallocate(irec_global)
+           endif
+
+        endif
+
+        ! not sure if need this sync
+        call synchronize_all()
+
+     enddo
+     !!  write gather file
+     if (myrank == 0) then
+        do icomp=1,NDIM
+           do irec_local = 1, acqui_simu(ievent)%nsta_slice
+              !! choose the rigth seismograms_*
+              Gather(acqui_simu(ievent)%number_receiver_global(irec_local),:,icomp) = array_to_write(icomp,irec_local,:)
+           enddo
+        enddo
+
+        !! write only the asked component or pressure
+        select case (trim(adjustl(name_file_to_write)))
+        case('adjoint_source')
+           ! we write adjoint sources in the inverted data system (write all))
+           irec=0
+           data_type = inversion_param%inverted_data_type
+           do idim=1,ndim
+              data_sys  = inversion_param%inverted_data_sys(idim:idim)
+              data_comp = inversion_param%inverted_data_comp(idim)
+              write(filename,*)trim(acqui_simu(ievent)%data_file_gather),'/adjoint_src_fsismo_', &
+                   trim(adjustl(data_type)),trim(adjustl(data_sys)),'.bin'
+              call write_binary_data(filename,nsta,nt,gather(:,:,idim))
+           enddo
+        case('data')
+           ! we write data the read data system (write all)
+           irec=0
+           data_type = acqui_simu(ievent)%read_data_type
+
+           ! perform rotations
+          select case (acqui_simu(ievent)%read_data_sys)
+          case ('xyz')
+             ! nothing to do
+          case('enz')
+             ! Data are in standard coordinate system
+             ! Data rotation required to pass in mesh system (zen -> xyz)
+             call define_mesh_rotation_matrix(lat0,lon0,azi0)
+             call rotate_comp_mesh2glob(gather(:,:,1), gather(:,:,2), gather(:,:,3), &
+                  acqui_simu(ievent)%read_station_position(1,:), &
+                  acqui_simu(ievent)%read_station_position(2,:), &
+                  nt, nsta, gather(:,:,3), gather(:,:,2), gather(:,:,1))
+          case('rtz')
+             ! Data are in the souce receiver coordinate system
+             ! Data rotation required (baz-azi) (rtz -> zne)
+             ! Data rotation required to pass in mesh system (zen -> xyz)
+             call define_mesh_rotation_matrix(lat0,lon0,azi0)
+             call rotate_comp_mesh2glob(gather(:,:,1), gather(:,:,2), gather(:,:,3), &
+                  acqui_simu(ievent)%read_station_position(1,:), &
+                  acqui_simu(ievent)%read_station_position(2,:), &
+                  nt, nsta, gather(:,:,3), gather(:,:,2), gather(:,:,1))
+             call rotate_ZNE_to_ZRT(gather(:,:,3), gather(:,:,2), gather(:,:,1), &
+                  gather(:,:,3), gather(:,:,1), gather(:,:,2), &
+                  nsta,nt,acqui_simu(ievent)%baz)
+          case('qtl')
+             !! Data are in the ray coordinate system
+             !! Data rotation required (baz-azi and incidence angle) (rtz -> zen)
+             !call rotate_LQT_to_ZNE(vl,vq,vt,vz,vn,ve,nrec,nt,bazi,inci)
+             !
+             !! Data rotation required to pass in mesh system (zen -> xyz)
+             !call define_mesh_rotation_matrix(lat0,lon0,azi0)
+             !call rotate_comp_glob2mesh(vz2, vn, ve, stalat, stalon, nt, nsta, vx, vy, vz)
+             write(6,*)'CATASTROPHIC ERROR'
+             write(6,*)'qtl is not implemented yet'
+             write(6,*)'NOW STOP'
+             stop
+          end select
+          do idim=1,ndim
+             data_sys  = acqui_simu(ievent)%read_data_sys(idim:idim)
+             data_comp = acqui_simu(ievent)%read_data_comp(idim)
+             write(filename,*)trim(acqui_simu(ievent)%data_file_gather),'/output_fsismo_', &
+                  trim(adjustl(data_type)),trim(adjustl(data_sys)),'.bin'
+             call write_binary_data(filename,nsta,nt,gather(:,:,idim))
+           enddo
+        case default
+           ! write as it stands
+           ! we write adjoint sources in the inverted data system (write all))
+           irec=0
+           data_type = inversion_param%inverted_data_type
+           do idim=1,ndim
+              data_sys  = inversion_param%inverted_data_sys(idim:idim)
+              data_comp = inversion_param%inverted_data_comp(idim)
+              if (idim == 1) write(filename,*)trim(acqui_simu(ievent)%event_rep),'/unknown_fsismo_1.bin'
+              if (idim == 2) write(filename,*)trim(acqui_simu(ievent)%event_rep),'/unknown_fsismo_2.bin'
+              if (idim == 3) write(filename,*)trim(acqui_simu(ievent)%event_rep),'/unknown_fsismo_3.bin'
+              call write_binary_data(filename,nsta,nt,gather(:,:,idim))
+           enddo
+        end select
+        deallocate(Gather)
+     endif
+
+     ! to be sure... there is a bug somewhere...
+     call synchronize_all()
+
+
+   end subroutine write_pif_data_gather
+
+
+
+
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !----------------------------------------------------------------
 ! read acquisiton input file and store acqui_simu type
@@ -848,8 +1311,7 @@ contains
       enddo
 99    close(666)
 
-      write(INVERSE_LOG_FILE,*) '       ALLOCATE  acquisition structure for ', NEVENT, ' events '
-      write(INVERSE_LOG_FILE,*)
+      write(INVERSE_LOG_FILE,*) '     ALLOCATE  acquisition structure for ', NEVENT, ' events '
 
       !! 2/ allocate and store type(acqui) acqui_simu
       if (NEVENT > 0) then
@@ -919,7 +1381,7 @@ contains
                  acqui_simu(ievent)%component(1)='  '
                  acqui_simu(ievent)%component(2)='  '
                  acqui_simu(ievent)%component(3)='  '
-                 !need to add '00' in case of mising components (because fortran cannot let the missing component to '  ')
+                 !need to add '00' in case of mising components (because Fortran cannot let the missing component to '  ')
                  line_to_read=line(ipos0:ipos1)//' 00 00 00'
 
                  read(line_to_read,*)  acqui_simu(ievent)%component(1), &
@@ -953,9 +1415,7 @@ contains
 
     if (myrank == 0) then
       write(INVERSE_LOG_FILE,*)
-      write(INVERSE_LOG_FILE,*)
       write(INVERSE_LOG_FILE,*) '     READING acquisition passed '
-      write(INVERSE_LOG_FILE,*)
     endif
 
     ! master broadcasts read values
@@ -1001,142 +1461,161 @@ contains
     ! only master reads inver_file
     if (myrank == 0) then
 
-      open(666, file=trim(inver_file))
-      do
-        read(666,'(a)',end=99) line
-        if (is_blank_line(line)) cycle
+       open(666, file=trim(inver_file))
+       do
+          read(666,'(a)',end=99) line
+          if (is_blank_line(line)) cycle
 
-        !! INDICES TO READ line -----------------------------------------------
-        ipos0=index(line,':')+1
-        ipos1=index(line,'#')-1
-        if (ipos1 < 0 ) ipos1=len_trim(line)
+          !! INDICES TO READ line -----------------------------------------------
+          ipos0=index(line,':')+1
+          ipos1=index(line,'#')-1
+          if (ipos1 < 0 ) ipos1=len_trim(line)
 
-        !! STORE KEYWORD ITEM -------------------------------------------------
-        keyw=trim(adjustl(line(1:ipos0-2)))
+          !! STORE KEYWORD ITEM -------------------------------------------------
+          keyw=trim(adjustl(line(1:ipos0-2)))
 
-        !! DIFFERENT ITEM TO READ ---------------------------------------------
-        select case (trim(keyw))
+          !! DIFFERENT ITEM TO READ ---------------------------------------------
+          select case (trim(keyw))
 
-        case ('Niter')
-           read(line(ipos0:ipos1),*)  inversion_param%Niter
+          case ('Niter')
+             read(line(ipos0:ipos1),*)  inversion_param%Niter
 
-        case('Niter_wolfe')
-           read(line(ipos0:ipos1),*)  inversion_param%Niter_wolfe
+          case('Niter_wolfe')
+             read(line(ipos0:ipos1),*)  inversion_param%Niter_wolfe
 
-        case('max_history_bfgs')
-           read(line(ipos0:ipos1),*)  inversion_param%max_history_bfgs
+          case('max_history_bfgs')
+             read(line(ipos0:ipos1),*)  inversion_param%max_history_bfgs
 
-        case('max_relative_pert')
-           read(line(ipos0:ipos1),*)  inversion_param%max_relative_pert
+          case('max_relative_pert')
+             read(line(ipos0:ipos1),*)  inversion_param%max_relative_pert
 
-        case('param_family')
-           read(line(ipos0:ipos1),*) inversion_param%param_family
+          case('param_family')
+             read(line(ipos0:ipos1),*) inversion_param%parameter_family_name
 
-        case('use_frequency_band_pass_filter')
-           inversion_param%use_band_pass_filter=.true.
-           read(line(ipos0:ipos1),*) inversion_param%Nifrq
-           allocate(fl(inversion_param%Nifrq))
-           allocate(fh(inversion_param%Nifrq))
+          case('nb_inver')
+             read(line(ipos0:ipos1),*) inversion_param%NinvPar
 
-        case('fl')
-           read(line(ipos0:ipos1),*) fl(:)
+          case('param_to_inv')
+             read(line(ipos0:ipos1),*) inversion_param%param_inv_name(1: inversion_param%NinvPar)
 
-        case('fh')
-           read(line(ipos0:ipos1),*) fh(:)
+          case('use_frequency_band_pass_filter')
+             inversion_param%use_band_pass_filter=.true.
+             read(line(ipos0:ipos1),*) inversion_param%Nifrq
+             allocate(fl(inversion_param%Nifrq))
+             allocate(fh(inversion_param%Nifrq))
 
-        case('input_sem_model')
-           read(line(ipos0:ipos1),*)  inversion_param%input_sem_model
+          case('fl')
+             read(line(ipos0:ipos1),*) fl(:)
 
-       case('input_sem_prior')
-          read(line(ipos0:ipos1),*)  inversion_param%input_sem_prior
+          case('fh')
+             read(line(ipos0:ipos1),*) fh(:)
 
-        case('output_model')
-           read(line(ipos0:ipos1),*)  inversion_param%output_model
+          case('input_sem_model')
+             read(line(ipos0:ipos1),*)  inversion_param%input_sem_model
 
-        case('input_fd_model')
-           read(line(ipos0:ipos1),*)  inversion_param%input_fd_model
+          case('input_sem_prior')
+             read(line(ipos0:ipos1),*)  inversion_param%input_sem_prior
 
-        case ('taper')
-           inversion_param%use_taper=.true.
-           read(line(ipos0:ipos1),*) inversion_param%xmin_taper, inversion_param%xmax_taper, &
-                inversion_param%ymin_taper, inversion_param%ymax_taper, &
-                inversion_param%zmin_taper, inversion_param%zmax_taper
+          case('output_model')
+             read(line(ipos0:ipos1),*)  inversion_param%output_model
 
-        case('shin_precond')
-           read(line(ipos0:ipos1),*) inversion_param%shin_precond
+          case('input_fd_model')
+             read(line(ipos0:ipos1),*)  inversion_param%input_fd_model
 
-        case('energy_precond')
-           read(line(ipos0:ipos1),*) inversion_param%energy_precond
+          case ('taper')
+             inversion_param%use_taper=.true.
+             read(line(ipos0:ipos1),*) inversion_param%xmin_taper, inversion_param%xmax_taper, &
+                  inversion_param%ymin_taper, inversion_param%ymax_taper, &
+                  inversion_param%zmin_taper, inversion_param%zmax_taper
 
-        case('z2_precond')
-           read(line(ipos0:ipos1),*) inversion_param%z2_precond
+          case('shin_precond')
+             read(line(ipos0:ipos1),*) inversion_param%shin_precond
 
-       case('z_precond')
-          read(line(ipos0:ipos1),*) inversion_param%aPrc, &
-                                    inversion_param%zPrc1, &
-                                    inversion_param%zPrc2
+          case('energy_precond')
+             read(line(ipos0:ipos1),*) inversion_param%energy_precond
 
-          inversion_param%z_precond=.true.
+          case('z2_precond')
+             read(line(ipos0:ipos1),*) inversion_param%z2_precond
+
+          case('z_precond')
+             read(line(ipos0:ipos1),*) inversion_param%aPrc, &
+                  inversion_param%zPrc1, &
+                  inversion_param%zPrc2
+
+             inversion_param%z_precond=.true.
 
 
-       case('relat_grad')
-          read(line(ipos0:ipos1),*) inversion_param%relat_grad
+          case('relat_grad')
+             read(line(ipos0:ipos1),*) inversion_param%relat_grad
 
-       case('relat_cost')
-          read(line(ipos0:ipos1),*) inversion_param%relat_cost
+          case('relat_cost')
+             read(line(ipos0:ipos1),*) inversion_param%relat_cost
 
-       case('dump_model_at_each_iteration')
-          read(line(ipos0:ipos1),*) inversion_param%dump_model_at_each_iteration
+          case('dump_model_at_each_iteration')
+             read(line(ipos0:ipos1),*) inversion_param%dump_model_at_each_iteration
 
-       case('dump_gradient_at_each_iteration')
-          read(line(ipos0:ipos1),*) inversion_param%dump_gradient_at_each_iteration
+          case('dump_gradient_at_each_iteration')
+             read(line(ipos0:ipos1),*) inversion_param%dump_gradient_at_each_iteration
 
-       case('dump_descent_direction_at_each_iteration')
-          read(line(ipos0:ipos1),*) inversion_param%dump_descent_direction_at_each_iteration
+          case('dump_descent_direction_at_each_iteration')
+             read(line(ipos0:ipos1),*) inversion_param%dump_descent_direction_at_each_iteration
 
-       case('use_tk_fd_regularization')
-          read(line(ipos0:ipos1),*) inversion_param%weight_Tikonov
-          inversion_param%use_regularization_FD_Tikonov=.true.
+          case('use_tk_fd_regularization')
+             read(line(ipos0:ipos1),*) inversion_param%weight_Tikonov
+             inversion_param%use_regularization_FD_Tikonov=.true.
 
-       case('use_tk_sem_regularization')
-          allocate(inversion_param%smooth_weight(inversion_param%NinvPar))
-          read(line(ipos0:ipos1),*) inversion_param%smooth_weight(1), &
-                                    inversion_param%smooth_weight(2), &
-                                    inversion_param%smooth_weight(3)
-          inversion_param%use_regularization_SEM_Tikonov=.true.
+          case('use_tk_sem_regularization')
+             allocate(inversion_param%smooth_weight(inversion_param%NinvPar))
+             read(line(ipos0:ipos1),*) inversion_param%smooth_weight(1), &
+                  inversion_param%smooth_weight(2), &
+                  inversion_param%smooth_weight(3)
+             inversion_param%use_regularization_SEM_Tikonov=.true.
 
-       case('use_tk_sem_damping')
-          allocate(inversion_param%damp_weight(inversion_param%NinvPar))
-          read(line(ipos0:ipos1),*) inversion_param%damp_weight(1), &
-                                    inversion_param%damp_weight(2), &
-                                    inversion_param%damp_weight(3)
-          inversion_param%use_damping_SEM_Tikonov=.true.
-          !! we have read standard deviation for model
-          !! then need to change
-          inversion_param%damp_weight(:) = 1. / inversion_param%damp_weight(:)**2
+          case('use_tk_sem_damping')
+             allocate(inversion_param%damp_weight(inversion_param%NinvPar))
+             read(line(ipos0:ipos1),*) inversion_param%damp_weight(1:inversion_param%NinvPar)
+             inversion_param%use_damping_SEM_Tikonov=.true.
+             !! we have read standard deviation for model
+             !! then need to change
+             inversion_param%damp_weight(:) = 1. / inversion_param%damp_weight(:)**2
 
-       case('use_tk_sem_vairiable_damping')
-          read(line(ipos0:ipos1),*) inversion_param%min_damp,inversion_param%max_damp, inversion_param%distance_from_source
-          inversion_param%use_variable_SEM_damping=.true.
+          case('use_tk_sem_vairiable_damping')
+             read(line(ipos0:ipos1),*) inversion_param%min_damp,inversion_param%max_damp, inversion_param%distance_from_source
+             inversion_param%use_variable_SEM_damping=.true.
 
-       case('prior_data_std')
-          read(line(ipos0:ipos1),*) inversion_param%prior_data_std
+          case('prior_data_std')
+             read(line(ipos0:ipos1),*) inversion_param%prior_data_std
 
-       case default
-          write(*,*) 'ERROR KEY WORD NOT MATCH : ', trim(keyw), ' in file ', trim(inver_file)
-          exit
+          case('data_to_invert_type')
+             read(line(ipos0:ipos1),*) inversion_param%inverted_data_type
 
-       end select
+          case('data_to_invert_system')
+             read(line(ipos0:ipos1),*) inversion_param%inverted_data_sys
 
-    enddo
+          case('data_to_invert_is_component')
+             read(line(ipos0:ipos1),*) inversion_param%inverted_data_comp
 
-99  close(666)
+          case('apply_src_weighting_to_gradient')
+             read(line(ipos0:ipos1),*) inversion_param%is_src_weigh_gradient
 
-   write(INVERSE_LOG_FILE,*)
-   write(INVERSE_LOG_FILE,*) '     READ  ', trim(inver_file)
-   write(INVERSE_LOG_FILE,*) '     Nb tot events ', acqui_simu(1)%nevent_tot
-   write(INVERSE_LOG_FILE,*)
-endif
+          case('convolve_synth_with_wavelet')
+             read(line(ipos0:ipos1),*) inversion_param%convolution_by_wavelet
+
+          case default
+             write(*,*) 'ERROR KEY WORD NOT MATCH : ', trim(keyw), ' in file ', trim(inver_file)
+             exit
+
+          end select
+
+       enddo
+
+99     close(666)
+
+       write(INVERSE_LOG_FILE,*)
+       write(INVERSE_LOG_FILE,*) '     READ  ', trim(inver_file)
+       write(INVERSE_LOG_FILE,*) '     Nb tot events ', acqui_simu(1)%nevent_tot
+       write(INVERSE_LOG_FILE,*)
+    endif
 
    if (VERBOSE_MODE .or. DEBUG_MODE) then
      inversion_param%dump_model_at_each_iteration=.true.
@@ -1184,23 +1663,32 @@ endif
    call MPI_BCAST(inversion_param%min_damp,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
    call MPI_BCAST(inversion_param%max_damp,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
    call MPI_BCAST(inversion_param%distance_from_source,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
+   call MPI_BCAST(inversion_param%NinvPar,1,MPI_INTEGER,0,my_local_mpi_comm_world,ier)
    if (myrank > 0 .and. inversion_param%use_regularization_SEM_Tikonov ) then
-      allocate(inversion_param%smooth_weight(inversion_param%NinvPar))
-    endif
-    if (inversion_param%use_regularization_SEM_Tikonov) &
-     call MPI_BCAST(inversion_param%smooth_weight(1),inversion_param%NinvPar,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
-    if (myrank > 0 .and. inversion_param%use_damping_SEM_Tikonov ) then
-       allocate(inversion_param%damp_weight(inversion_param%NinvPar))
-    endif
-    if (inversion_param%use_damping_SEM_Tikonov) &
+    allocate(inversion_param%smooth_weight(inversion_param%NinvPar))
+   endif
+   if (inversion_param%use_regularization_SEM_Tikonov) &
+    call MPI_BCAST(inversion_param%smooth_weight(1),inversion_param%NinvPar,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
+   if (myrank > 0 .and. inversion_param%use_damping_SEM_Tikonov ) then
+    allocate(inversion_param%damp_weight(inversion_param%NinvPar))
+   endif
+   if (inversion_param%use_damping_SEM_Tikonov) &
    call MPI_BCAST(inversion_param%damp_weight(1),inversion_param%NinvPar,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
-   call MPI_BCAST(inversion_param%param_family,MAX_LEN_STRING,MPI_CHARACTER,0,my_local_mpi_comm_world,ier)
+   call MPI_BCAST(inversion_param%parameter_family_name,MAX_LEN_STRING,MPI_CHARACTER,0,my_local_mpi_comm_world,ier)
+   call MPI_BCAST(inversion_param%param_inv_name, 50*MAX_LEN_STRING,MPI_CHARACTER,0,my_local_mpi_comm_world,ier)
    call MPI_BCAST(inversion_param%xmin_taper,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
    call MPI_BCAST(inversion_param%xmax_taper,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
    call MPI_BCAST(inversion_param%ymin_taper,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
    call MPI_BCAST(inversion_param%ymax_taper,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
    call MPI_BCAST(inversion_param%zmin_taper,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
    call MPI_BCAST(inversion_param%zmax_taper,1,CUSTOM_MPI_TYPE,0,my_local_mpi_comm_world,ier)
+
+   !call MPI_BCAST(inversion_param%component,6,mpi_character,0,my_local_mpi_comm_world,ier)
+   call MPI_BCAST(inversion_param%inverted_data_comp,3,mpi_logical,0,my_local_mpi_comm_world,ier)
+   call MPI_BCAST(inversion_param%inverted_data_sys,3,mpi_character,0,my_local_mpi_comm_world,ier)
+   call MPI_BCAST(inversion_param%inverted_data_type,1,mpi_character,0,my_local_mpi_comm_world,ier)
+   call MPI_BCAST(inversion_param%is_src_weigh_gradient,1,mpi_logical,0,my_local_mpi_comm_world,ier)
+   call MPI_BCAST(inversion_param%convolution_by_wavelet,1,mpi_logical,0,my_local_mpi_comm_world,ier)
 
    !! set private values
    use_band_pass_filter=inversion_param%use_band_pass_filter
@@ -1376,7 +1864,7 @@ endif
     double precision, dimension(:,:,:), allocatable           :: nu_source
 
     real(kind=CUSTOM_REAL), dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: interparray
-    double precision                                          :: final_distance_source
+    double precision                                          :: final_distance_source,final_distance_squared
     integer                                                   :: idomain
     ! location search
     real(kind=CUSTOM_REAL) :: distance_min_glob,distance_max_glob
@@ -1523,7 +2011,7 @@ endif
             ! get z target coordinate, depending on the topography
             if (.not. USE_SOURCES_RECEIVERS_Z) depth(isrc) = depth(isrc)*1000.0d0
             call get_elevation_and_z_coordinate(long(isrc),lat(isrc),x_target_source(isrc),y_target_source(isrc), &
-                                                z_target_source(isrc),elevation,depth(isrc))
+                                                       z_target_source(isrc),elevation,depth(isrc))
 
           enddo
 
@@ -1580,12 +2068,12 @@ endif
                 SOURCES_CAN_BE_BURIED, elemsize_max_glob, &
                 acqui_simu(ievent)%ispec_selected_source(isrc), xi_source(isrc), eta_source(isrc), gamma_source(isrc), &
                 acqui_simu(ievent)%Xs(isrc), acqui_simu(ievent)%Ys(isrc), acqui_simu(ievent)%Zs(isrc), &
-                idomain,nu_source(:,:,isrc))
+                idomain,nu_source(:,:,isrc),final_distance_squared)
 
         ! synchronize all the processes to make sure all the estimates are available
         call synchronize_all()
 
-        call locate_MPI_slice_and_bcast_to_all(x_target_source(isrc), y_target_source(isrc), z_target_source(isrc), &
+        call locate_MPI_slice_and_bcast_to_all_single(x_target_source(isrc), y_target_source(isrc), z_target_source(isrc), &
                    acqui_simu(ievent)%Xs(isrc), acqui_simu(ievent)%Ys(isrc),acqui_simu(ievent)%Zs(isrc), &
                    xi_source(isrc), eta_source(isrc), gamma_source(isrc), &
                    acqui_simu(ievent)%ispec_selected_source(isrc),acqui_simu(ievent)%islice_selected_source(isrc), &

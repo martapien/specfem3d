@@ -107,8 +107,16 @@ end subroutine Project_model_FD_grid2SEM
 !--------------------------------------------------------------------------------------------------------------------
 subroutine read_fd_grid_parameters_for_projection()
 
+  integer ier
+
+  open(676,file='fd_proj_grid.txt',iostat=ier)
+
+  if (ier /= 0) then
+    print *,'Error opening file "fd_proj_grid.txt", that defines properties of the regular grid'
+    stop
+  endif
+
   ! read fd grid parameters !!
-  open(676,file='fd_proj_grid.txt')
   read(676, *)  ox_fd_proj, oy_fd_proj, oz_fd_proj
   read(676, *)  hx_fd_proj, hy_fd_proj, hz_fd_proj
   read(676, *)  nx_fd_proj, ny_fd_proj, nz_fd_proj
@@ -153,7 +161,7 @@ end subroutine read_fd_grid_parameters_for_projection
     ! read fd grid parameters !!
     call read_fd_grid_parameters_for_projection()
 
-    ! get mesh properties (mandatory before calling locate_point_in_mesh)
+    ! get mesh properties (mandatory before calling locate_point_in_mesh_simple)
     call usual_hex_nodes(NGNOD,iaddx,iaddy,iaddz)
     call check_mesh_distances(myrank,NSPEC_AB,NGLOB_AB,ibool,xstore,ystore,zstore, &
          x_min_glob,x_max_glob,y_min_glob,y_max_glob,z_min_glob,z_max_glob, &
@@ -235,7 +243,7 @@ end subroutine read_fd_grid_parameters_for_projection
                      ispec_selected, xi_loc, eta_loc, gamma_loc, x_found, y_found, z_found, myrank, ispec)
 
 !!$                !! compute islice MPI partition where is the point  (xfd, yfd, zfd)
-!!$                call locate_MPI_slice_and_bcast_to_all1(x_to_locate, y_to_locate, z_to_locate, x_found, y_found, z_found, &
+!!$                call locate_MPI_slice_and_bcast_to_all_1(x_to_locate, y_to_locate, z_to_locate, x_found, y_found, z_found, &
 !!$                     xi_loc, eta_loc, gamma_loc, ispec_selected, islice_selected,  distance_from_target, myrank)
 
 !!$                if (DEBUG_MODE) then
@@ -371,7 +379,7 @@ end subroutine read_fd_grid_parameters_for_projection
 !!$                     ispec_selected, xi_loc, eta_loc, gamma_loc, x_found, y_found, z_found, myrank, ispec)
 !!$
 !!$                !! compute islice MPI partition where is the point  (xfd, yfd, zfd)
-!!$                call locate_MPI_slice_and_bcast_to_all1(x_to_locate, y_to_locate, z_to_locate, x_found, y_found, z_found, &
+!!$                call locate_MPI_slice_and_bcast_to_all_1(x_to_locate, y_to_locate, z_to_locate, x_found, y_found, z_found, &
 !!$                     xi_loc, eta_loc, gamma_loc, ispec_selected, islice_selected,  distance_from_target, myrank)
 !!$
 !!$                if (abs(xi_loc) < 1.05d0 .and. abs(eta_loc) < 1.05d0 .and. abs(gamma_loc) < 1.05d0) then
@@ -520,7 +528,7 @@ end subroutine read_fd_grid_parameters_for_projection
 !--------------------------------------------------------------------------------------------------------------------
 !  locate MPI slice which contains the point and bcast to all
 !--------------------------------------------------------------------------------------------------------------------
-  subroutine locate_MPI_slice_and_bcast_to_all1(x_to_locate, y_to_locate, z_to_locate, x_found, y_found, z_found, &
+  subroutine locate_MPI_slice_and_bcast_to_all_1(x_to_locate, y_to_locate, z_to_locate, x_found, y_found, z_found, &
        xi, eta, gamma, ispec_selected, islice_selected, distance_from_target, myrank)
 
     integer,                                        intent(in)        :: myrank
@@ -642,14 +650,17 @@ end subroutine read_fd_grid_parameters_for_projection
 
     !if (myrank==0)  write(INVERSE_LOG_FILE,*) ' bcast parameters to all slices  : passed'
 
-  end subroutine locate_MPI_slice_and_bcast_to_all1
+  end subroutine locate_MPI_slice_and_bcast_to_all_1
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !--------------------------------------------------------------------------------------------------------------------
 !  locate point in mesh.
 !--------------------------------------------------------------------------------------------------------------------
-  subroutine locate_point_in_mesh(x_to_locate, y_to_locate, z_to_locate, iaddx, iaddy, iaddz, elemsize_max_glob, &
+  subroutine locate_point_in_mesh_simple(x_to_locate, y_to_locate, z_to_locate, iaddx, iaddy, iaddz, elemsize_max_glob, &
        ispec_selected, xi_found, eta_found, gamma_found, x_found, y_found, z_found, myrank)
+
+! note: this routine differs slightly from the one in locate_point.f90
+!       by "simply" finding the best element using its inner GLL points
 
     double precision,                   intent(in)     :: x_to_locate, y_to_locate, z_to_locate
     real(kind=CUSTOM_REAL),             intent(in)     ::elemsize_max_glob
@@ -838,7 +849,8 @@ end subroutine read_fd_grid_parameters_for_projection
     y_found = y
     z_found = z
 
-  end subroutine locate_point_in_mesh
+  end subroutine locate_point_in_mesh_simple
+
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !--------------------------------------------------------------------------------------------------------------------
 !  locate point in element.

@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -93,6 +93,9 @@
 
 ! clean-up
   deallocate(xstore,ystore,zstore)
+  deallocate(ibool)
+  deallocate(ispec_is_surface_external_mesh)
+  deallocate(iglob_is_surface_external_mesh)
 
 ! make sure everybody is synchronized
   call synchronize_all()

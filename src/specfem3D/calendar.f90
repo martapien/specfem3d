@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -351,7 +351,7 @@
 !
 ! PORTABILITY
 !
-! This subroutine is written in standard FORTRAN 90.
+! This subroutine is written in standard Fortran 90.
 ! It calls no external functions or subroutines and should run
 ! without problem on any computer having a 32-bit word or longer.
 !

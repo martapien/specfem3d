@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -847,7 +847,7 @@
       ! note: passing arguments:
       !          **array**(1:nibool_interfaces_ext_mesh(iinterface),iinterface)
       !       might lead to additional copy memory operations for certain compilers (slows down performance);
-      !       to avoid this in fortran, one might just pass the pointer to the first array value:
+      !       to avoid this in Fortran, one might just pass the pointer to the first array value:
       !          **array**(1,iinterface)
 
       ! non-blocking synchronous send request

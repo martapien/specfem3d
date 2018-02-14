@@ -44,48 +44,61 @@ contains
     SIMULATION_TYPE=1
     SAVE_FORWARD=.true.
     COMPUTE_AND_STORE_STRAIN = .false.
+    SAVE_MESH_FILES=.false.
 
     !! forward solver ------------------------------------------------------------------------------------------------
     call InitSpecfemForOneRun(acqui_simu, ievent, inversion_param, iter_inverse)
     call iterate_time()
     call FinalizeSpecfemForOneRun(acqui_simu, ievent)
 
-    select case ( trim(acqui_simu(ievent)%component(1)) )
 
-    case('UX', 'UY', 'UZ')
-       !! array seismogram in displacement
-       name_file_tmp = trim(acqui_simu(ievent)%data_file_gather)
+    select case(trim(type_input))
+    case ('teleseismic')
 
-       write(INVERSE_LOG_FILE,*) '  ... Writing simulated data gather for event :', ievent
-
-       call write_bin_sismo_on_disk(ievent, acqui_simu, seismograms_d,  name_file_tmp, myrank)
-
-    case('PR')
-       !! array seismogram in pressure
-       name_file_tmp = trim(acqui_simu(ievent)%data_file_gather)
-
-       write(INVERSE_LOG_FILE,*) '  ... Writing simulated data gather for event :  ', ievent
-
-       call write_bin_sismo_on_disk(ievent, acqui_simu, seismograms_p,  name_file_tmp, myrank)
+       name_file_tmp = 'data'
+       call write_pif_data_gather(ievent, acqui_simu, inversion_param, seismograms_d, name_file_tmp, myrank)
 
     case default
 
-       write(*,*) ' ERROR Component not known : ', trim(acqui_simu(ievent)%component(1))
-       stop
+       select case ( trim(acqui_simu(ievent)%component(1)) )
+
+       case('UX', 'UY', 'UZ')
+          !! array seismogram in displacement
+          name_file_tmp = trim(acqui_simu(ievent)%data_file_gather)
+
+          write(INVERSE_LOG_FILE,*) '  ... Writing simulated data gather for event :', ievent
+
+          call write_bin_sismo_on_disk(ievent, acqui_simu, seismograms_d,  name_file_tmp, myrank)
+
+       case('PR')
+          !! array seismogram in pressure
+          name_file_tmp = trim(acqui_simu(ievent)%data_file_gather)
+
+          write(INVERSE_LOG_FILE,*) '  ... Writing simulated data gather for event :  ', ievent
+
+          call write_bin_sismo_on_disk(ievent, acqui_simu, seismograms_p,  name_file_tmp, myrank)
+
+       case default
+
+          write(*,*) ' ERROR Component not known : ', trim(acqui_simu(ievent)%component(1))
+          stop
+
+       end select
 
     end select
 
   end subroutine ComputeSismosPerEvent
 
-!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-!----------------------------------------------------------------------------------------------------------------------------------
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!-----------------------------------------------------------------------------------------------------------------
 !> call specfem solver for computing gradient
-!----------------------------------------------------------------------------------------------------------------------------------
+!----------------------------------------------------------------------------------------------------------------
   subroutine ComputeGradientPerEvent(ievent, iter_inverse, acqui_simu,  inversion_param)
 
     integer,                                        intent(in)    ::  ievent, iter_inverse
     type(acqui),  dimension(:), allocatable,        intent(inout) ::  acqui_simu
     type(inver),                                    intent(inout) ::  inversion_param
+    character(len=MAX_LEN_STRING)                                 ::  name_file_tmp
 
 
     logical                                                       :: save_COUPLE_WITH_INJECTION_TECHNIQUE
@@ -110,19 +123,28 @@ contains
     !! define adjoint sources ----------------------------------------------------------------------------------
     call write_adjoint_sources_for_specfem(acqui_simu, inversion_param, ievent, myrank)
 
-    !! dump synthetics and adjoint sources to ckeck
-    if (VERBOSE_MODE .or. DEBUG_MODE) then
-       call dump_adjoint_sources(iter_inverse, ievent, acqui_simu, myrank)
+    select case(trim(type_input))
+    case ('teleseismic')
 
-       select case (trim(acqui_simu(ievent)%component(1)))
-       case('UX', 'UY', 'UZ')
-          call dump_seismograms(iter_inverse, ievent, seismograms_d, acqui_simu, myrank)
-          call dump_filtered_data(iter_inverse,ievent,acqui_simu(ievent)%synt_traces, acqui_simu, myrank)
-       case('PR')
-          call dump_seismograms(iter_inverse, ievent, seismograms_p, acqui_simu, myrank)
-          call dump_filtered_data(iter_inverse,ievent,acqui_simu(ievent)%synt_traces, acqui_simu, myrank)
-       end select
-    endif
+       name_file_tmp = 'adjoint_source'
+       call write_pif_data_gather(ievent, acqui_simu, inversion_param, acqui_simu(ievent)%synt_traces, name_file_tmp, myrank)
+
+    case default
+       !! dump synthetics and adjoint sources to ckeck
+       if (VERBOSE_MODE .or. DEBUG_MODE) then
+          call dump_adjoint_sources(iter_inverse, ievent, acqui_simu, myrank)
+
+          select case (trim(acqui_simu(ievent)%component(1)))
+          case('UX', 'UY', 'UZ')
+             call dump_seismograms(iter_inverse, ievent, seismograms_d, acqui_simu, myrank)
+             call dump_filtered_data(iter_inverse,ievent,acqui_simu(ievent)%synt_traces, acqui_simu, myrank)
+          case('PR')
+             call dump_seismograms(iter_inverse, ievent, seismograms_p, acqui_simu, myrank)
+             call dump_filtered_data(iter_inverse,ievent,acqui_simu(ievent)%synt_traces, acqui_simu, myrank)
+          end select
+       endif
+
+    end select
 
     !! choose parameters to perform both the forward and adjoint simulation
     SIMULATION_TYPE=3
@@ -461,7 +483,7 @@ contains
 
     !! clean arrays ----------------------------------------------------------------------------------------------------------------
     ! reset all forward wavefields----------------------------------------------------------------------------------------------------
-    call prepare_timerun_init_wavefield()  !! routine from specfem
+    call prepare_wavefields()  !! routine from specfem
 
     ! memory variables if attenuation
     if (ATTENUATION) then
@@ -581,7 +603,7 @@ contains
              if (num_abs_boundary_faces > 2147483646 / (CUSTOM_REAL * NDIM * NGLLSQUARE)) then
                 print *,'reclen needed exceeds integer 4-byte limit: ',b_reclen_field
                 print *,'  ',CUSTOM_REAL, NDIM, NGLLSQUARE, num_abs_boundary_faces
-                print *,'bit size fortran: ',bit_size(b_reclen_field)
+                print *,'bit size Fortran: ',bit_size(b_reclen_field)
                 call exit_MPI(myrank,"error b_reclen_field integer limit")
              endif
              ! total file size
@@ -599,7 +621,7 @@ contains
              if (num_abs_boundary_faces > 2147483646 / (CUSTOM_REAL * NGLLSQUARE)) then
                 print *,'reclen needed exceeds integer 4-byte limit: ',b_reclen_potential
                 print *,'  ',CUSTOM_REAL, NGLLSQUARE, num_abs_boundary_faces
-                print *,'bit size fortran: ',bit_size(b_reclen_potential)
+                print *,'bit size Fortran: ',bit_size(b_reclen_potential)
                 call exit_MPI(myrank,"error b_reclen_potential integer limit")
              endif
              ! total file size (two lines to implicitly convert to 8-byte integers)
@@ -621,7 +643,7 @@ contains
                 if (num_abs_boundary_faces > 2147483646 / (CUSTOM_REAL * NDIM * NGLLSQUARE)) then
                    print *,'reclen needed exceeds integer 4-byte limit: ',b_reclen_field
                    print *,'  ',CUSTOM_REAL, NDIM, NGLLSQUARE, num_abs_boundary_faces
-                   print *,'bit size fortran: ',bit_size(b_reclen_field)
+                   print *,'bit size Fortran: ',bit_size(b_reclen_field)
                    call exit_MPI(myrank,"error b_reclen_field integer limit")
                 endif
                 ! total file size
@@ -638,7 +660,7 @@ contains
                 if (num_abs_boundary_faces > 2147483646 / (CUSTOM_REAL * NGLLSQUARE)) then
                    print *,'reclen needed exceeds integer 4-byte limit: ',b_reclen_potential
                    print *,'  ',CUSTOM_REAL, NGLLSQUARE, num_abs_boundary_faces
-                   print *,'bit size fortran: ',bit_size(b_reclen_potential)
+                   print *,'bit size Fortran: ',bit_size(b_reclen_potential)
                    call exit_MPI(myrank,"error b_reclen_potential integer limit")
                 endif
                 ! total file size (two lines to implicitly convert to 8-byte integers)
@@ -652,8 +674,8 @@ contains
        endif
     endif
 
-    !! reallocate all GPU memory according the fortran arrays
-    if (GPU_MODE) call prepare_timerun_GPU()
+    !! reallocate all GPU memory according the Fortran arrays
+    if (GPU_MODE) call prepare_GPU()
 
     !! open new log file for specfem -----------------------------------------------------------------------------------------------
     if (myrank == 0 .and. SIMULATION_TYPE == 1) then
@@ -919,6 +941,7 @@ contains
     call setup_GLL_points()
     call detect_mesh_surfaces()
     call setup_sources_receivers()  !! we have one dummy source and STATION_ADJOINT to set up without crashes
+
     SIMULATION_TYPE=1               !! here we need to prepare the fisrt run
     SAVE_FORWARD=.true.             !! which is mandatory direct and need to save forward wavefield
 

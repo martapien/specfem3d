@@ -84,10 +84,13 @@ specfem3D_OBJECTS = \
 	$O/fault_solver_kinematic.spec.o \
 	$O/finalize_simulation.spec.o \
 	$O/get_cmt.spec.o \
+	$O/get_elevation.spec.o \
 	$O/get_force.spec.o \
 	$O/gravity_perturbation.spec.o \
 	$O/initialize_simulation.spec.o \
 	$O/iterate_time.spec.o \
+	$O/locate_MPI_slice.spec.o \
+	$O/locate_point.spec.o \
 	$O/locate_receivers.spec.o \
 	$O/locate_source.spec.o \
 	$O/make_gravity.spec.o \
@@ -97,8 +100,13 @@ specfem3D_OBJECTS = \
 	$O/pml_compute_accel_contribution.spec.o \
 	$O/pml_compute_memory_variables.spec.o \
 	$O/pml_par.spec.o \
+	$O/prepare_attenuation.spec.o \
+	$O/prepare_gpu.spec.o \
+	$O/prepare_gravity.spec.o \
+	$O/prepare_noise.spec.o \
 	$O/prepare_timerun.spec.o \
-	$O/program_specfem3D.spec.o \
+	$O/prepare_wavefields.spec.o \
+	$O/print_stf_file.spec.o \
 	$O/read_external_stf.spec.o \
 	$O/read_mesh_databases.spec.o \
 	$O/save_adjoint_kernels.spec.o \
@@ -106,6 +114,7 @@ specfem3D_OBJECTS = \
 	$O/setup_movie_meshes.spec.o \
 	$O/setup_sources_receivers.spec.o \
 	$O/specfem3D.spec.o \
+	$O/station_filter.spec.o \
 	$O/update_displacement_scheme.spec.o \
 	$O/update_displacement_LDDRK.spec.o \
 	$O/write_movie_output.spec.o \
@@ -128,6 +137,7 @@ specfem3D_SHARED_OBJECTS = \
 	$O/get_jacobian_boundaries.shared.o \
 	$O/get_shape3D.shared.o \
 	$O/gll_library.shared.o \
+	$O/heap_sort.shared.o \
 	$O/hex_nodes.shared.o \
 	$O/lagrange_poly.shared.o \
 	$O/netlib_specfun_erf.shared.o \
@@ -138,6 +148,7 @@ specfem3D_SHARED_OBJECTS = \
 	$O/read_value_parameters.shared.o \
 	$O/recompute_jacobian.shared.o \
 	$O/save_header_file.shared.o \
+	$O/search_kdtree.shared.o \
 	$O/sort_array_coordinates.shared.o \
 	$O/utm_geo.shared.o \
 	$O/write_VTK_data.shared.o \
@@ -169,7 +180,7 @@ specfem3D_SHARED_OBJECTS += $(COND_MPI_OBJECTS)
 ###
 ### OPENMP
 ###
-specfem3D_SHARED_OBJECTS += $(COND_OPENMP_OBJECTS)
+specfem3D_SHARED_OBJECTS += $(COND_OMP_OBJECTS)
 
 ###
 ### CUDA
@@ -246,6 +257,19 @@ specfem3D_OBJECTS += $(adios_specfem3D_OBJECTS)
 specfem3D_SHARED_OBJECTS += $(adios_specfem3D_PREOBJECTS)
 
 
+###
+### VTK
+###
+
+ifeq ($(VTK),yes)
+specfem3D_OBJECTS += \
+	$O/vtk_window.spec.o \
+	$O/vtk_helper.visualcc.o \
+	$(EMPTY_MACRO)
+specfem3D_MODULES += \
+	$(FC_MODDIR)/vtk_window_par.$(FC_MODEXT) \
+	$(EMPTY_MACRO)
+endif
 
 #######################################
 
@@ -267,7 +291,7 @@ ${E}/xspecfem3D: $(specfem3D_OBJECTS) $(specfem3D_SHARED_OBJECTS)
 	@echo ""
 	@echo $(INFO_CUDA_SPECFEM)
 	@echo ""
-	${FCLINK} -o ${E}/xspecfem3D $(specfem3D_OBJECTS) $(specfem3D_SHARED_OBJECTS) $(MPILIBS) $(CUDA_LINK)
+	${FCLINK} -o ${E}/xspecfem3D $(specfem3D_OBJECTS) $(specfem3D_SHARED_OBJECTS) $(MPILIBS) $(CUDA_LINK) $(VTKLIBS)
 	@echo ""
 
 else
@@ -277,7 +301,7 @@ ${E}/xspecfem3D: $(specfem3D_OBJECTS) $(specfem3D_SHARED_OBJECTS)
 	@echo ""
 	@echo "building xspecfem3D"
 	@echo ""
-	${FCLINK} -o ${E}/xspecfem3D $(specfem3D_OBJECTS) $(specfem3D_SHARED_OBJECTS) $(MPILIBS)
+	${FCLINK} -o ${E}/xspecfem3D $(specfem3D_OBJECTS) $(specfem3D_SHARED_OBJECTS) $(MPILIBS) $(VTKLIBS)
 	@echo ""
 
 endif
@@ -313,9 +337,12 @@ $O/fault_solver_kinematic.spec.o: $O/fault_solver_common.spec.o
 $O/compute_forces_viscoelastic.spec.o: $O/pml_par.spec.o $O/fault_solver_dynamic.spec.o
 $O/compute_forces_viscoelastic_calling_routine.spec.o: $O/pml_par.spec.o $O/fault_solver_dynamic.spec.o $O/fault_solver_kinematic.spec.o
 
+$O/prepare_timerun.spec.o: $O/pml_par.spec.o $O/fault_solver_dynamic.spec.o $O/fault_solver_kinematic.spec.o
+$O/prepare_gpu.spec.o: $O/fault_solver_dynamic.spec.o $O/fault_solver_kinematic.spec.o
+
 ## gravity
 $O/iterate_time.spec.o: $O/gravity_perturbation.spec.o
-$O/prepare_timerun.spec.o: $O/pml_par.spec.o $O/fault_solver_dynamic.spec.o $O/fault_solver_kinematic.spec.o $O/gravity_perturbation.spec.o
+$O/prepare_gravity.spec.o: $O/gravity_perturbation.spec.o
 
 ## adios
 $O/read_forward_arrays_adios.spec_adios.o: $O/pml_par.spec.o
@@ -329,6 +356,9 @@ $O/adios_helpers.shared_adios.o: \
 	$O/adios_helpers_definitions.shared_adios_module.o \
 	$O/adios_helpers_writers.shared_adios_module.o
 
+## kdtree
+$O/locate_point.spec.o: $O/search_kdtree.shared.o
+$O/setup_sources_receivers.spec.o: $O/search_kdtree.shared.o
 
 ####
 #### rule to build each .o file below
@@ -380,5 +410,13 @@ $O/%.openmp.o: $S/%.f90 ${SETUP}/constants.h
 	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
 
 
+####
+#### VTK file
+####
 
+$O/%.visualcc.o: $S/%.cpp ${SETUP}/config.h
+	${CC} -c $(CPPFLAGS) $(CFLAGS) $(MPI_INCLUDES) -o $@ $<
+
+$O/%.visualcc.o: $S/%.c ${SETUP}/config.h
+	${CC} -c $(CPPFLAGS) $(CFLAGS) $(MPI_INCLUDES) -o $@ $<
 

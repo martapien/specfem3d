@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -45,13 +45,14 @@
 
 !----------- parameters that can be changed by the user -----------
 
-!! DK DK added this temporarily here to make SPECFEM3D and SPECFEM3D_GLOBE much more similar
-!! DK DK in terms of the structure of their main time iteration loop; these are future features
-!! DK DK that are missing in this code but implemented in the other and that could thus be cut and pasted one day
-  logical, parameter :: UNDO_ATTENUATION = .false.
+! for validation of undoing of attenuation versus an exact solution saved to disk
+! should never be needed any more, it was developed and used for Figure 3 of
+! D. Komatitsch, Z. Xie, E. Bozdag, E. Sales de Andrade, D. Peter, Q. Liu and J. Tromp,
+! Anelastic sensitivity kernels with parsimonious storage for adjoint tomography and full waveform inversion,
+! Geophysical Journal International, vol. 206(3), p. 1467-1478, doi: 10.1093/gji/ggw224 (2016).
   logical, parameter :: EXACT_UNDOING_TO_DISK = .false.
+! ID of the huge file in which we dump all the time steps of the simulation
   integer, parameter :: IFILE_FOR_EXACT_UNDOING = 244
-  logical, parameter :: VTK_MODE = .false.
 
 ! set to .false.  if running on a Beowulf-type machine with local disks
 ! set to .true. if running on a shared-memory machine with common file system
@@ -189,6 +190,14 @@
 ! that completes an orthonormal.
   logical, parameter :: EXTERNAL_MESH_RECEIVERS_NORMAL = .false.
 
+! maximum number of sources and receivers to locate simultaneously
+  integer, parameter :: NSOURCES_SUBSET_MAX = 100
+  integer, parameter :: NREC_SUBSET_MAX = 200
+
+! use brute-force search (loops over all elements) or search in kd-tree for locating target point in mesh
+! (brute-force search will be slower but even more accurate)
+  logical, parameter :: DO_BRUTE_FORCE_POINT_SEARCH = .false.
+
 !!-----------------------------------------------------------
 !!
 !! CPML perfectly matched absorbing layers
@@ -227,6 +236,32 @@
 
 ! impose Dirichlet conditions for the potential (i.e. Neumann for displacement) on the outer edges of the C-PML layers
   logical, parameter :: SET_NEUMANN_RATHER_THAN_DIRICHLET_FOR_FLUID_PMLs = .true.
+
+!!-----------------------------------------------------------
+!!
+!! For coupling with EXTERNAL CODE
+!!
+!!-----------------------------------------------------------
+
+! add support for AXISEM and FK as external codes, not only DSM
+  integer, parameter :: INJECTION_TECHNIQUE_IS_DSM    = 1
+  integer, parameter :: INJECTION_TECHNIQUE_IS_AXISEM = 2
+  integer, parameter :: INJECTION_TECHNIQUE_IS_FK     = 3
+
+! Big storage version of coupling with DSM (will always set to .false. after the light storage version will be validated)
+  logical, parameter :: old_DSM_coupling_from_Vadim = .true.
+
+! First run to store on boundaries for using reciprocty calculate Kirchoff-Helmholtz integral
+  logical, parameter :: SAVE_RUN_BOUN_FOR_KH_INTEGRAL = .false.
+
+! for subroutine compute_vol_or_surf_integral_on_whole_domain
+  integer, parameter :: Surf_or_vol_integral    = 1  !!! 1 = Surface integral, 2 = Volume, 3 = Both
+
+! some old tests (currently unstable; do not remove them though, we might fix this one day)
+  integer, parameter :: Ntime_step_dsm = 100
+  integer, parameter :: IIN_veloc_dsm = 51, IIN_tract_dsm = 52
+  integer, parameter :: IIN_displ_axisem = 54
+
 
 !!-----------------------------------------------------------
 !!
@@ -288,6 +323,22 @@
 !
 ! postprocess the colors to balance them if Droux (1993) algorithm is not used
   logical, parameter :: BALANCE_COLORS_SIMPLE_ALGO = .false.
+
+!!-----------------------------------------------------------
+!!
+!! in-situ visualization (using VTK)
+!!
+!!-----------------------------------------------------------
+
+! use low-res/hi-res mesh point locations (corners only or all GLL points)
+  logical, parameter :: VTK_USE_HIRES         = .false.
+
+! show free surface points
+  logical, parameter :: VTK_SHOW_FREESURFACE  = .true.
+
+! show volumetric field
+  logical, parameter :: VTK_SHOW_VOLUME       = .true.
+
 
 !------------------------------------------------------
 !----------- do not modify anything below -------------
@@ -382,26 +433,52 @@
 ! flag to exclude elements that are too far from target in topography detection
   logical, parameter :: USE_DISTANCE_CRITERION_TOPO = .true.
 
-! size of topography and bathymetry file for Southern California
-  integer, parameter :: NX_TOPO_FILE = 1401,NY_TOPO_FILE = 1001
-  double precision, parameter :: ORIG_LAT_TOPO = 32.d0
-  double precision, parameter :: ORIG_LONG_TOPO = -121.d0
-  double precision, parameter :: DEGREES_PER_CELL_TOPO = 5.d0 / 1000.d0
-  character(len=*), parameter :: TOPO_FILE = 'DATA/la_topography/topo_bathy_final.dat'
-
-! ! size of topography and bathymetry file for Piero Basini's model
-!   integer, parameter :: NX_TOPO_FILE = 787, NY_TOPO_FILE = 793
-!   double precision, parameter :: ORIG_LAT_TOPO = -102352.d0
-!   double precision, parameter :: ORIG_LONG_TOPO = 729806.d0
-! ! for Piero Basini's model this is the resolution in meters of the topo file
-!   double precision, parameter :: DEGREES_PER_CELL_TOPO = 250.d0
-!   character(len=*), parameter :: TOPO_FILE = 'DATA/piero_model/dem_EV_UTM_regular_250_reordered.dat'
-
 ! flag for projection from latitude/longitude to UTM, and back
   integer, parameter :: ILONGLAT2UTM = 0, IUTM2LONGLAT = 1
 
 ! for total energy calculation
   integer, parameter :: IOUT_ENERGY = 937  ! file number for the energy file
+
+!!-----------------------------------------------------------
+!!
+!! Topography file
+!!
+!!-----------------------------------------------------------
+! specifies topography file to determine the (exact) elevation of each GLL point at the free surface
+! in case TOPOGRAPHY = .true. (used for ocean load approximation)
+
+!! Socal1D example
+!! size of topography and bathymetry file for EXAMPLE/meshfem3D_examples/socal1D/DATA/meshfem3D_files/interface4.dat
+  integer, parameter :: NX_TOPO_FILE = 2,NY_TOPO_FILE = 2
+  double precision, parameter :: ORIG_LAT_TOPO = 32.d0
+  double precision, parameter :: ORIG_LONG_TOPO = -121.d0
+  double precision, parameter :: DEGREES_PER_CELL_TOPO = 6.d0
+  character(len=*), parameter :: TOPO_FILE = 'DATA/meshfem3D_files/interface4.dat'
+
+!! Many interfaces example
+!! size of topography and bathymetry file for EXAMPLE/meshfem3D_examples/socal1D/DATA/meshfem3D_files/interface4.dat
+!  integer, parameter :: NX_TOPO_FILE = 221,NY_TOPO_FILE = 200
+!  double precision, parameter :: ORIG_LAT_TOPO = 0.d0
+!  double precision, parameter :: ORIG_LONG_TOPO = 0.d0
+!  double precision, parameter :: DEGREES_PER_CELL_TOPO = 150.d0
+!  character(len=*), parameter :: TOPO_FILE = 'DATA/meshfem3D_files/example_topo.dat'
+
+!! LA Southern California
+!! size of topography and bathymetry file for Southern California
+!  integer, parameter :: NX_TOPO_FILE = 1401,NY_TOPO_FILE = 1001
+!  double precision, parameter :: ORIG_LAT_TOPO = 32.d0
+!  double precision, parameter :: ORIG_LONG_TOPO = -121.d0
+!  double precision, parameter :: DEGREES_PER_CELL_TOPO = 5.d0 / 1000.d0
+!  character(len=*), parameter :: TOPO_FILE = 'DATA/la_topography/topo_bathy_final.dat'
+
+!! Piero's model
+!! size of topography and bathymetry file for Piero Basini's model
+!  integer, parameter :: NX_TOPO_FILE = 787, NY_TOPO_FILE = 793
+!  double precision, parameter :: ORIG_LAT_TOPO = -102352.d0
+!  double precision, parameter :: ORIG_LONG_TOPO = 729806.d0
+!! for Piero Basini's model this is the resolution in meters of the topo file
+!  double precision, parameter :: DEGREES_PER_CELL_TOPO = 250.d0
+!  character(len=*), parameter :: TOPO_FILE = 'DATA/piero_model/dem_EV_UTM_regular_250_reordered.dat'
 
 !!-----------------------------------------------------------
 !!
@@ -457,13 +534,13 @@
   integer, parameter :: IMODEL_IPATI            = 10
   integer, parameter :: IMODEL_IPATI_WATER      = 11
   integer, parameter :: IMODEL_SEP              = 12
+  integer, parameter :: IMODEL_COUPLED          = 13
 
 !!-----------------------------------------------------------
 !!
 !! time stamp information
 !!
 !!-----------------------------------------------------------
-
 ! print date and time estimate of end of run in another country,
 ! in addition to local time.
 ! For instance: the code runs at Caltech in California but the person
@@ -492,3 +569,12 @@
     (/0.0_CUSTOM_REAL,0.032918605146_CUSTOM_REAL,0.249351723343_CUSTOM_REAL, &
       0.466911705055_CUSTOM_REAL,0.582030414044_CUSTOM_REAL,0.847252983783_CUSTOM_REAL/)
 
+!!----------------------
+!!
+!!  VM VM test dipole source in fluid regionn
+!!
+!!  if .true. this will change the way the force solution is set in fluid region, trying to put a dipole in fluids
+!!  if .false. the behaviour of code remains unchanged
+!!
+!!-----------
+  logical, parameter  ::    DIPOLE_SOURCE_IN_FLUID = .false.

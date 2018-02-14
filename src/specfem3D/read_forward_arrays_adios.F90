@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -250,6 +250,14 @@ subroutine read_forward_arrays_adios()
       call adios_schedule_read(handle, sel, "R_yz/array", 0, 1, &
                                b_R_yz, ier)
 
+      start(1) = local_dim_R_trace * myrank
+      count_ad(1) = NGLLX * NGLLY * NGLLZ * NSPEC_ATTENUATION_AB * N_SLS
+      sel_num = sel_num+1
+      sel => selections(sel_num)
+      call adios_selection_boundingbox (sel , 1, start, count_ad)
+      call adios_schedule_read(handle, sel, "R_trace/array", 0, 1, &
+                               b_R_trace, ier)
+
       start(1) = local_dim_epsilondev_xx * myrank
       count_ad(1) = NGLLX * NGLLY * NGLLZ * NSPEC_STRAIN_ONLY
       sel_num = sel_num+1
@@ -290,16 +298,8 @@ subroutine read_forward_arrays_adios()
       call adios_schedule_read(handle, sel, "epsilondev_yz/array", 0, 1, &
                                b_epsilondev_yz, ier)
 
-      start(1) = local_dim_R_trace * myrank
-      count_ad(1) = NGLLX * NGLLY * NGLLZ * NSPEC_ATTENUATION_AB * N_SLS
-      sel_num = sel_num+1
-      sel => selections(sel_num)
-      call adios_selection_boundingbox (sel , 1, start, count_ad)
-      call adios_schedule_read(handle, sel, "R_trace/array", 0, 1, &
-                               b_R_trace, ier)
-
       start(1) = local_dim_epsilondev_trace * myrank
-      count_ad(1) = NGLLX * NGLLY * NGLLZ * NSPEC_ATTENUATION_AB
+      count_ad(1) = NGLLX * NGLLY * NGLLZ * NSPEC_STRAIN_ONLY
       sel_num = sel_num+1
       sel => selections(sel_num)
       call adios_selection_boundingbox (sel , 1, start, count_ad)

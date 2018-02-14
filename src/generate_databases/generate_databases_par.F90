@@ -4,10 +4,10 @@
 !               ---------------------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                        Princeton University, USA
-!                and CNRS / University of Marseille, France
+!                              CNRS, France
+!                       and Princeton University, USA
 !                 (there are currently many more authors!)
-! (c) Princeton University and CNRS / University of Marseille, July 2012
+!                           (c) October 2017
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -39,9 +39,10 @@
     NPOWER,CPML_Rcoef, &
     IMODEL_DEFAULT,IMODEL_GLL,IMODEL_1D_PREM,IMODEL_1D_CASCADIA,IMODEL_1D_SOCAL, &
     IMODEL_SALTON_TROUGH,IMODEL_TOMO,IMODEL_USER_EXTERNAL,IMODEL_IPATI,IMODEL_IPATI_WATER, &
-    IMODEL_1D_PREM_PB,IMODEL_SEP, &
+    IMODEL_1D_PREM_PB,IMODEL_SEP,IMODEL_COUPLED, &
     IDOMAIN_ACOUSTIC,IDOMAIN_ELASTIC,IDOMAIN_POROELASTIC, &
-    OUTPUT_FILES,NX_TOPO_FILE,NY_TOPO_FILE, &
+    OUTPUT_FILES, &
+    NX_TOPO_FILE,NY_TOPO_FILE, &
     USE_MESH_COLORING_GPU,MAX_NUMBER_OF_COLORS, &
     ADIOS_TRANSPORT_METHOD
 
@@ -99,7 +100,6 @@
   integer, dimension(:,:), allocatable :: elmnts_ext_mesh
   integer, dimension(:,:), allocatable :: mat_ext_mesh
   integer :: max_nibool_interfaces_ext_mesh
-  integer, dimension(:,:), allocatable :: ibool_interfaces_ext_mesh_dummy
 
   character(len=MAX_STRING_LEN) :: prname
 
@@ -161,6 +161,7 @@
 ! integer :: nglob_total
   double precision :: nglob_total
 
+! mesh surface
   logical,dimension(:),allocatable :: ispec_is_surface_external_mesh,iglob_is_surface_external_mesh
   integer :: nfaces_surface,nfaces_surface_glob_ext_mesh
 
