@@ -109,7 +109,7 @@
 
   ! stores mesh files as cubit for single process run
   ! todo: we could put this parameter into the Mesh_Par_file
-  logical, parameter :: SAVE_MESH_AS_CUBIT = .false.
+  logical, parameter :: SAVE_MESH_AS_CUBIT = .true.
 
   !------------------------------------------------------------------
 
@@ -476,10 +476,12 @@
 
     ! for axisem coupling case  ( only serial case for mesher use scotch after)
     integer, parameter :: myrank = 0
-    integer, parameter :: nlayer = 12 !! (number of layer in the model iasp91, or ak135, or prem (one more layer than the model)
+    integer   :: nlayer  !! (number of layer in the 1D model)
+    integer   :: npcoef   !! (number of coeffs in polynomials 
     double precision, parameter :: GAUSSALPHA = 0.d0, GAUSSBETA = 0.d0
     double precision   :: rotation_matrix(3,3)
-    double precision   :: zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4)
+    double precision, dimension(:), allocatable    :: zlayer
+    double precision, dimension(:,:), allocatable ::  vpv, vsv, density
     integer            :: ilayer, updown(NGLLZ)
 
     !! GLL points
@@ -501,6 +503,7 @@
 
     integer :: ielm, j,k, imin,imax,jmin,jmax,kmin,kmax
     integer :: nel_lat, nel_lon, nel_depth
+    !integer :: ncoef
     logical :: buried_box
 
     character(len=10)  :: line
@@ -635,7 +638,7 @@
        call get_shape3D(myrank,shape3D,dershape3D,xigll,yigll,zigll,NGNOD)
        !
 
-       !! reading parameters for coupling
+       !! reading parameters for coupling -------------------------------------------
 
        open(90, file='MESH/ParFileMeshChunk',action='read')
        read(90,'(a)') line
@@ -657,24 +660,27 @@
        else
           radius_of_box_top = 6371000.
        endif
-       model1D_file = 'MESH/'//trim(model1D_file)
+       model1D_file = 'DATA/'//trim(model1D_file)
        close(90)
 
-       ! read 1D AxiSEM model
-       call Read_dsm_model(model1D_file,vpv,vsv,density,zlayer,nlayer)
+       ! read 1D model  -------------------------------------------
+       open(88,file=trim(model1D_file))
+       read(88,*) nlayer, npcoef
+       allocate(vpv(nlayer, npcoef),vsv(nlayer, npcoef),density(nlayer, npcoef))
+       allocate(zlayer(nlayer))
+       do i=1, nlayer
+          read(88,*) zlayer(i)
+          read(88,*) vpv(i,:)
+          read(88,*) vsv(i,:)
+          read(88,*) density(i,:)
+       end do
+       close(88) 
 
-       ! modele 1D
-       open(88,file='MESH/model_1D.in')
-       write(88,*) nlayer,4
-       do i=1,nlayer
-          write(88,*) zlayer(i)
-          write(88,'(4f20.10)') vpv(i,:)
-          write(88,'(4f20.10)') vsv(i,:)
-          write(88,'(4f20.10)') density(i,:)
-       enddo
-       z_bottom = minval(zgrid(:,:,:,:))
-       write(88,*)  radius_of_box_top + z_bottom!6371000.+z_bottom
-       write(88,*)  lon_center_chunk,  lat_center_chunk,  chunk_azi
+       !! write info about box position for generate_databases ----- 
+       open(88,file='DATA/meshed_chunk_info.txt')
+       !z_bottom = minval(zgrid(:,:,:,:))
+       write(88,*) radius_of_box_top
+       write(88,*) lon_center_chunk,  lat_center_chunk,  chunk_azi
        close(88)
 
         ! compute rotation matrix
