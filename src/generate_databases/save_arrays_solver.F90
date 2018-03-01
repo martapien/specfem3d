@@ -392,11 +392,12 @@
   ! MPI interfaces
   use generate_databases_par, only: nibool_interfaces_ext_mesh,ibool_interfaces_ext_mesh,num_interfaces_ext_mesh
 
-  
+
   use create_regions_mesh_ext_par
 
+  use constants, only: INJECTION_TECHNIQUE_IS_INSTASEIS
   use shared_parameters, only: NPROC, COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH, &
-    INJECTION_TECHNIQUE_TYPE, INJECTION_TECHNIQUE_IS_INSTASEIS, NSTEP
+    INJECTION_TECHNIQUE_TYPE, NSTEP
 
   implicit none
 
@@ -806,11 +807,54 @@
     write(IOUT) ispec_is_elastic
     close(IOUT)
 
+    !! MPC GLL points in local coordinates,kappa, mu and rho
+
+    nb_gll_myrank = 0
+    do iface = 1,num_abs_boundary_faces
+       ispec = abs_boundary_ispec(iface)
+       if (ispec_is_elastic(ispec)) then
+          do igll = 1,NGLLSQUARE
+             nb_gll_myrank = nb_gll_myrank + 1
+          enddo
+       endif
+    enddo
+
+    allocate(nb_gll_per_proc(sizeprocs))
+    allocate(offset_per_proc(sizeprocs))
+
+    call synchronize_all()
+
+    if (myrank > 0) then
+      call send_i_t(nb_gll_myrank,1,0)
+    else
+      nb_gll_per_proc(1) = nb_gll_myrank
+      do i=2, sizeprocs
+        call recv_i_t(nb_gll_per_proc(i),1,i-1)
+      enddo
+
+      offset_per_proc(1) = 0
+      do i=2, sizeprocs
+        offset_per_proc(i) = sum(nb_gll_per_proc(1:i-1))
+      enddo
+    endif  !! myrank > 0
+    call bcast_all_i(nb_gll_per_proc, sizeprocs)
+    call bcast_all_i(offset_per_proc, sizeprocs)
+
+
+    call synchronize_all()
+
+    allocate(coords_buf(3, nb_gll_per_proc(myrank+1)))
+    allocate(normals_buf(3, nb_gll_per_proc(myrank+1)))
+    allocate(kappa_buf(nb_gll_per_proc(myrank+1)))
+    allocate(mu_buf(nb_gll_per_proc(myrank+1)))
+    allocate(rho_buf(nb_gll_per_proc(myrank+1)))
+
     !! VM VM write an ascii file for instaseis input
     filename = prname(1:len_trim(prname))//'normal.txt'
     open(IOUT,file=filename(1:len_trim(filename)),status='unknown',iostat=ier)
     write(IOUT, *) ' number of points :', num_abs_boundary_faces*NGLLSQUARE
 
+    ipoint = 0
     do iface = 1,num_abs_boundary_faces
        ispec = abs_boundary_ispec(iface)
        if (ispec_is_elastic(ispec)) then
@@ -1018,4 +1062,3 @@
   endif ! (COUPLE_WITH_INJECTION_TECHNIQUE .or. MESH_A_CHUNK_OF_THE_EARTH)
 
   end subroutine save_arrays_solver_files
-

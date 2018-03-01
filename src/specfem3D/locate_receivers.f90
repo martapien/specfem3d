@@ -260,7 +260,8 @@
 
   ! this is executed by main process only
   if (myrank == 0) then
-
+    !! MPC output just the located xyz of a receiver
+    open(1001, FILE="receivers_xyz.txt", FORM="FORMATTED", STATUS="REPLACE", ACTION="WRITE")
     do irec = 1,nrec
 
       ! checks stations location
@@ -269,6 +270,8 @@
         call exit_MPI(myrank,'error locating receiver')
       endif
 
+
+      write(1001,*) trim(station_name(irec)), ' : ', x_found(irec), ' ', y_found(irec), ' ', z_found(irec)
       ! limits user output if too many receivers
       if (nrec < 1000 .and. (.not. SU_FORMAT )) then
 
@@ -347,7 +350,7 @@
       endif
 
     enddo
-
+    close(1001)
     ! compute maximal distance for all the receivers
     final_distance_max = maxval(final_distance(:))
 
@@ -518,4 +521,3 @@ contains
 
 
   end subroutine locate_receivers
-

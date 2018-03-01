@@ -39,23 +39,19 @@
 
   use constants
 
-! ToDo CHECK
-
   !! MPC for Instaseis-Specfem HDF5 dumps
   use HDF5
 
-  use specfem_par_elastic, only: displ
-  
+  use specfem_par_elastic, only: displ, & !epsilon_trace_over_3, &
+          epsilondev_xx, epsilondev_yy, epsilon_trace_new, &
+          epsilondev_xy, epsilondev_xz, epsilondev_yz
+
   use specfem_par, only: it_dsm, it_fk, Veloc_dsm_boundary, Tract_dsm_boundary, &
             Veloc_axisem, Tract_axisem, Tract_axisem_time, myrank, sizeprocs
 
   use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, &
-                  INJECTION_TECHNIQUE_TYPE,INJECTION_TECHNIQUE_IS_DSM, &
-                  INJECTION_TECHNIQUE_IS_AXISEM,INJECTION_TECHNIQUE_IS_FK, &
-                  INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INJECTION_BOX_LOCATION, &
-                  INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER, &
-                  INSTASEIS_INJECTION_BOX_LOCATION_SOURCE, &
-                  old_DSM_coupling_from_Vadim,RECIPROCITY_AND_KH_INTEGRAL,SAVE_RUN_BOUN_FOR_KH_INTEGRAL,Ntime_step_dsm
+                  INJECTION_TECHNIQUE_TYPE, INSTASEIS_INJECTION_BOX_LOCATION, &
+                  RECIPROCITY_AND_KH_INTEGRAL
 
 ! *********************************************************************************
 ! added by Ping Tong (TP / Tong Ping) for the FK3D calculation
@@ -129,6 +125,60 @@
   double precision :: cs(4), w
   real(kind=CUSTOM_REAL) ::  cs_single(4) !vx_FK,vy_FK,vz_FK,tx_FK,ty_FK,tz_FK
 ! *********************************************************************************
+
+  !! MPC for Instaseis-Specfem HDF5 dumps
+  ! Names (file and HDF5 objects)
+  character(len=17), parameter :: hdf5_file_write = "specfem_dump.hdf5"
+  character(len=20), parameter :: hdf5_file_read = "gll_coordinates.hdf5"
+  character(len=5), parameter :: grp_local = "local"
+  character(len=18), parameter :: dset_d = "local/displacement"
+  character(len=18), parameter :: dset_s = "local/strain"
+  character(len=18), parameter :: dset_gll = "gll_weights"
+  character(len=26), parameter :: attr_nbrec_by_proc = &
+                                    "nb_points_per_specfem_proc"
+  character(len=23), parameter :: attr_offset_by_proc = &
+                                    "offset_per_specfem_proc"
+
+  ! Identifiers
+  integer(hid_t) :: write_file_id     ! File identifier
+  integer(hid_t) :: read_file_id     ! File identifier
+  integer(hid_t) :: plist_id          ! Property list identifier
+  integer(hid_t) :: read_grp_id      ! Group identifier
+  integer(hid_t) :: dset_d_id         ! Dataset identifier
+  integer(hid_t) :: dset_s_id         ! Dataset identifier
+  integer(hid_t) :: dspace_d_id       ! Dataspace identifier
+  integer(hid_t) :: dspace_s_id       ! Dataspace identifier
+  integer(hid_t) :: mspace_d_id       ! Memspace identifier
+  integer(hid_t) :: mspace_s_id       ! Memspace identifier
+  integer(hid_t) :: attr_nbrec_by_proc_id    ! Attribite identifier
+  integer(hid_t) :: attr_offset_by_proc_id   ! Attribite identifier
+  integer(hid_t) :: dset_gll_id         ! Dataset identifier
+  integer(hid_t) :: dspace_gll_id       ! Dataspace identifier
+  integer(hid_t) :: mspace_gll_id       ! Memspace identifier
+
+  integer :: error ! Error flag
+
+  integer :: d_rank = 2, s_rank = 2, gll_rank = 1 ! Dataset ranks in memory and file
+
+  integer(hsize_t), dimension(2) :: d_dimsm     ! Dataset:
+  integer(hsize_t), dimension(2) :: s_dimsm     ! - dimensions in memory
+  integer(hsize_t), dimension(1) :: gll_dimsm   ! - dimensions in memory
+  integer(hsize_t), dimension(1) :: gll_dimsf   ! - dimensions in file
+  integer(hsize_t), dimension(3) :: d_countf    ! Hyperslab size in file
+  integer(hsize_t), dimension(3) :: s_countf   ! Hyperslab size in file
+  integer(hsize_t), dimension(1) :: gll_countf    ! Hyperslab size in file
+  integer(hsize_t), dimension(3) :: d_offsetf   ! Hyperslab offset in f
+  integer(hsize_t), dimension(3) :: s_offsetf  ! Hyperslab offset in f
+  integer(hsize_t), dimension(1) :: gll_offsetf  ! Hyperslab offset in f
+  integer(hsize_t), dimension(1) :: attr_nbrec_by_proc_dim   ! Attribute
+                                                             ! dimensions
+  ! Data and attribute buffers
+  real, allocatable :: displ_buf(:, :), strain_buf(:, :), weights_buf(:)
+  integer, allocatable :: nrec_by_proc(:), offset_by_proc(:)
+
+  ! And some helpers
+  integer :: ipoint, nbrec
+
 
   !! CD modif. : begin (implemented by VM) !! For coupling with DSM
 
@@ -411,8 +461,10 @@
 
         ! gets associated, weighted jacobian
         jacobianw = abs_boundary_jacobian2Dw(igll,iface)
-        if (it == 1) then
-          weights_buf(ipoint) = jacobianw
+        if ((INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
+            (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER) .and. &
+            (it == 1)) then
+              weights_buf(ipoint) = jacobianw
         endif
         ! adds stacey term (weak form)
         accel(1,iglob) = accel(1,iglob) - tx*jacobianw
@@ -475,9 +527,9 @@
     call h5close_f(error)
 
 
-    if (myrank == 0) then
-      write(*, *) "Dumping fields to hdf5 file, time step: ", it
-    endif
+    !if (myrank == 0) then
+    !  write(*, *) "Dumping fields to hdf5 file, time step: ", it
+    !endif
 
     !! MPC dump displacement and strain in hdf5
     ! Initialize hdf5 interface
@@ -1702,4 +1754,3 @@ subroutine compute_spline_coef_to_store(Sig, npts, spline_coeff)
   deallocate(c)
 
 end subroutine compute_spline_coef_to_store
-

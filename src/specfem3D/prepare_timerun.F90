@@ -53,7 +53,7 @@
   call prepare_timerun_mass_matrices()
 
   ! initializes arrays
-  call prepare_timerun_init_wavefield()
+  call prepare_wavefields()
 
   ! Loading kinematic and dynamic fault solvers.
   call BC_DYNFLT_init(prname,DT,myrank)
@@ -1027,4 +1027,3 @@
 
   end subroutine prepare_timerun_OpenMP
 #endif
-

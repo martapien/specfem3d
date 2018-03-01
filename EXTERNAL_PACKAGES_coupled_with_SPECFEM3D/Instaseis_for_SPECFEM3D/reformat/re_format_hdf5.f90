@@ -112,7 +112,7 @@ program re_format_hdf5
   call MPI_COMM_SIZE(MPI_COMM_WORLD, nbproc, ierr)
 
   if (myrank == 0) then
-    open(10,file='./Param_files_for_buried_box/inputs_coupling/coupling.par')
+    open(10,file='./Inputs_Instaseis_Coupling/coupling.par')
     read(10,'(a)') meshfem_hdf5_file        !! meshfem3D bd points (cartesian)
     read(10,*) nSpecfem_proc                !! number of specfem procs
     read(10,*) lat_src, lon_src             !! axisem source position

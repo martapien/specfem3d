@@ -99,26 +99,15 @@
   implicit none
 
   character(len=256):: filename
+  character(len=250) :: model1D_file
   integer i,cc
   double precision aa,bb
 
-  filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//'/coeff_poly_deg12'
-  open(27,file=trim(filename))
-  read(27,*) ndeg_poly
-  allocate(smooth_vp(0:ndeg_poly),smooth_vs(0:ndeg_poly))
-  do i=ndeg_poly,0,-1
-     read(27,*) aa,bb,cc
-     smooth_vp(i) = aa
-     smooth_vs(i) = bb
-     ! write(*,*) a,b
-  enddo
-  close(27)
-
   !write(*,*) " Reading 1D model "
-
-  filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//'/model_1D.in'
+  model1D_file = 'ak135'
+  filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//trim(model1D_file)
   open(27,file=trim(filename))
-  read(27,*) nlayer,ncoeff
+  read(27,*) nlayer, ncoeff
   allocate(vpv_1D(nlayer,ncoeff))
   allocate(vsv_1D(nlayer,ncoeff))
   allocate(density_1D(nlayer,ncoeff))
@@ -129,10 +118,13 @@
      read(27,*) vsv_1D(i,:)
      read(27,*) density_1D(i,:)
   enddo
-  read(27,*) ZREF
-  read(27,*) OLON,OLAT
+  !read(27,*) ZREF
+  !read(27,*) OLON,OLAT
   close(27)
 
+  ZREF = 6371000.
+  OLON = 1.5
+  OLAT = 42.5
   end subroutine read_model_for_coupling_or_chunk
 
 !----------------------------------------------------------------
@@ -238,5 +230,3 @@
     end function Interpol
 
   end subroutine model_1D_coupling
-
-

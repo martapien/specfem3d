@@ -37,7 +37,7 @@ lines_src = list(filter(None, (line.split('#')[0].strip() for line in lines)))
 
 src_lat = float(lines_src[0])
 src_lon = float(lines_src[1])
-depth_in_m = float(lines_src[2])
+depth_in_m = float(lines_src[2]) * 1000.
 m_rr = float(lines_src[3])
 m_tt = float(lines_src[4])
 m_pp = float(lines_src[5])

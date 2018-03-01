@@ -343,19 +343,20 @@
     enddo
 
     ! user output
-    if (myrank == 0) then
-      if (mod(ispec,nspec/10) == 0) then
-        tCPU = wtime() - time_start
+
+    !if (myrank == 0) then
+    !  if (mod(ispec,nspec/10) == 0) then
+    !    tCPU = wtime() - time_start
         ! remaining
-        tCPU = (10.0-ispec/(nspec/10.0))/ispec/(nspec/10.0)*tCPU
-        write(IMAIN,*) "    ",ispec/(nspec/10) * 10," %", &
-                      " time remaining:", tCPU,"s"
+    !    tCPU = (10.0-ispec/(nspec/10.0))/ispec/(nspec/10.0)*tCPU
+    !    write(IMAIN,*) "    ",ispec/(nspec/10) * 10," %", &
+    !                  " time remaining:", tCPU,"s"
 
         ! flushes file buffer for main output file (IMAIN)
-        call flush_IMAIN()
+    !    call flush_IMAIN()
 
-      endif
-    endif
+    !  endif
+    !endif
   enddo
 
   ! checks material domains

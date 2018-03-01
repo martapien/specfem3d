@@ -28,7 +28,7 @@ if rank == 0:
     # define paths relative to path_to_par
     path_to_source_par = path_to_par + '/source.par'
     path_to_coupling_pars = path_to_par + '/coupling.par'
-    path_to_hdf5 = path_to_par + '/../../gll_coordinates.hdf5'
+    path_to_hdf5 = path_to_par + '/../gll_coordinates.hdf5'
 
     # read from coupling.par
     f_cpl = open(path_to_coupling_pars, 'r')
@@ -83,7 +83,7 @@ else:
 
 src_lat = float(src_dict[0])
 src_lon = float(src_dict[1])
-depth_in_m = float(src_dict[2])
+depth_in_m = float(src_dict[2]) * 1000.
 m_rr = float(src_dict[3])
 m_tt = float(src_dict[4])
 m_pp = float(src_dict[5])

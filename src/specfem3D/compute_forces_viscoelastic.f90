@@ -55,7 +55,8 @@ subroutine compute_forces_viscoelastic(iphase, &
                         num_phase_ispec_elastic,nspec_inner_elastic,nspec_outer_elastic, &
                         phase_ispec_inner_elastic,backward_simulation)
 
-  use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ,NDIM,N_SLS,ONE_THIRD,FOUR_THIRDS
+  use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ,NDIM,N_SLS,ONE_THIRD,FOUR_THIRDS, &
+  INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER, INJECTION_TECHNIQUE_IS_INSTASEIS
 
   use fault_solver_dynamic, only: Kelvin_Voigt_eta
 
@@ -79,8 +80,8 @@ subroutine compute_forces_viscoelastic(iphase, &
                      rmemory_displ_elastic,PML_displ_old,PML_displ_new
 
   use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, &
-      INJECTION_TECHNIQUE_TYPE, INSTASEIS_INJECTION_BOX_LOCATION, &
-      INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER, INJECTION_TECHNIQUE_IS_INSTASEIS
+      INJECTION_TECHNIQUE_TYPE, INSTASEIS_INJECTION_BOX_LOCATION
+
   implicit none
 
   integer :: NSPEC_AB,NGLOB_AB
@@ -907,4 +908,3 @@ subroutine compute_strain_in_element(tempx1_att,tempx2_att,tempx3_att,tempx1,tem
   enddo
 
 end subroutine compute_strain_in_element
-
