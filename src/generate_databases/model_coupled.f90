@@ -52,6 +52,12 @@
   integer :: ilayer,nlayer,ncoeff,ndeg_poly
   double precision :: ZREF,OLON,OLAT
 
+  !! gaussain perturbation definition
+  double precision :: sx, sy, sz
+  double precision :: Ampl_pert_vp, Ampl_pert_vs, Ampl_pert_rho
+  double precision :: x_center_gauss, y_center_gauss, z_center_gauss
+
+
   end module model_coupled_par
 
 !
@@ -66,7 +72,7 @@
 
   use constants
 
-  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH
+  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH, ANISOTROPY, ATTENUATION
 
   implicit none
 
@@ -95,36 +101,112 @@
   subroutine read_model_for_coupling_or_chunk()
 
   use model_coupled_par !! VM VM custom subroutine for coupling with DSM
+  use shared_parameters, only:  ANISOTROPY, ATTENUATION
 
   implicit none
 
-  character(len=256):: filename
+  character(len=256) :: filename
+  character(len=10)  :: line
   character(len=250) :: model1D_file
-  integer i,cc
-  double precision aa,bb
+  integer            :: i
+  double precision   :: ANGULAR_WIDTH_ETA_RAD, ANGULAR_WIDTH_XI_RAD
+  double precision   :: lat_center_chunk, lon_center_chunk, chunk_depth, chunk_azi
+  double precision   :: radius_of_box_top
+  logical            :: buried_box
+  integer            :: nel_lat, nel_lon, nel_depth
+
+  !! reading chunk parameters 
+  open(27,file='MESH/ParFileMeshChunk',action='read')
+  read(27,'(a)') line
+  read(27,*) ANGULAR_WIDTH_XI_RAD, ANGULAR_WIDTH_ETA_RAD
+  read(27,'(a)') line
+  read(27,*) lon_center_chunk, lat_center_chunk, chunk_azi
+  read(27,'(a)') line
+  read(27,*) chunk_depth
+  read(27,'(a)') line
+  read(27,*) nel_lon,nel_lat, nel_depth
+  read(27,'(a)') line
+  read(27,'(a)') model1D_file
+  read(27,'(a)') line
+  read(27,*) buried_box
+  if (buried_box) then
+     read(27,'(a)') line
+     read(27,*) radius_of_box_top
+     radius_of_box_top =  radius_of_box_top * 1000.
+  else
+     radius_of_box_top = 6371000.
+  endif
+  close(27)
+ 
+  OLON = lon_center_chunk
+  OLAT = lat_center_chunk
+  ZREF = radius_of_box_top
 
   !write(*,*) " Reading 1D model "
-  model1D_file = 'ak135'
-  filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//trim(model1D_file)
-  open(27,file=trim(filename))
-  read(27,*) nlayer, ncoeff
-  allocate(vpv_1D(nlayer,ncoeff))
-  allocate(vsv_1D(nlayer,ncoeff))
-  allocate(density_1D(nlayer,ncoeff))
-  allocate(zlayer(nlayer))
-  do i=1,nlayer
-     read(27,*) zlayer(i)
-     read(27,*) vpv_1D(i,:)
-     read(27,*) vsv_1D(i,:)
-     read(27,*) density_1D(i,:)
-  enddo
-  !read(27,*) ZREF
-  !read(27,*) OLON,OLAT
-  close(27)
 
-  ZREF = 6371000.
-  OLON = 1.5
-  OLAT = 42.5
+  !! reading 1D reference model given by polynomial coeffiscients 
+  if (ANISOTROPY) then 
+     
+     !! read aniso model 
+     write(*,*) " external 1D anisotropic model not defined yet "
+     stop
+
+     if (ATTENUATION) then 
+        !! TO DO  ...
+        !! read 1D model with attenuation 
+        write(*,*) " external 1D vsico-elastic model not defined yet "
+        stop
+
+     else
+        !! TO DO  ...
+     end if
+
+  else
+
+     if (ATTENUATION) then 
+
+        !! TO DO  ...
+        !! read 1D model with attenuation 
+        write(*,*) " external 1D vsico-elastic model not defined yet "
+        stop
+
+     else
+
+        !! isotropic 1D model: 
+        filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//trim(model1D_file)
+        open(27,file=trim(filename))
+        read(27,*) nlayer,ncoeff
+        allocate(vpv_1D(nlayer,ncoeff))
+        allocate(vsv_1D(nlayer,ncoeff))
+        allocate(density_1D(nlayer,ncoeff))
+        allocate(zlayer(nlayer))
+        do i=1,nlayer
+           read(27,*) zlayer(i)
+           read(27,*) vpv_1D(i,:)
+           read(27,*) vsv_1D(i,:)
+           read(27,*) density_1D(i,:)
+        enddo
+        close(27)
+
+     end if
+
+  end if
+
+
+
+ 
+   
+  !! hardcoded gaussian pert (todo need to read an input file)
+  x_center_gauss=0.
+  y_center_gauss=0. 
+  z_center_gauss=-100000.
+  sx=30000.
+  sy=30000.
+  sz=25000.
+  Ampl_pert_vp=500.d0 !! absolute amplitude perturbation
+  Ampl_pert_vs=200.d0
+  Ampl_pert_rho=200.d0
+
   end subroutine read_model_for_coupling_or_chunk
 
 !----------------------------------------------------------------
@@ -187,7 +269,33 @@
 
   call  model_1D_coupling(x,y,z,rho,vp,vs,radius)
 
+
+  !! hardcoded gaussaian paerturbation : 
+  call add_gaussian_pert(x, y, z, rho, vp, vs)
+
   end subroutine model_coupled_values
+
+!----------------------------------------------------------------
+
+
+  subroutine add_gaussian_pert(x, y, z, rho, vp, vs)
+
+    use constants, only: CUSTOM_REAL
+    use  model_coupled_par
+
+    double precision,       intent(in)    :: x, y, z
+    real(kind=CUSTOM_REAL), intent(inout) :: rho, vp, vs
+    double precision                      :: gauss_value
+
+    gauss_value = exp( -0.5d0 * (    ((x - x_center_gauss) / sx)**2 + &
+                                     ((y - y_center_gauss) / sy)**2 + & 
+                                     ((z - z_center_gauss) / sz)**2) )
+
+    vp = vp + Ampl_pert_vp * gauss_value
+    vs = vs + Ampl_pert_vs * gauss_value
+    rho = rho +  Ampl_pert_rho * gauss_value
+
+  end subroutine add_gaussian_pert
 
 !----------------------------------------------------------------
 
@@ -203,7 +311,24 @@
 
   double precision, parameter :: Xtol = 1d-2
 
+  double precision :: xmin_pert, xmax_pert, ymin_pert, ymax_pert, zmin_pert, zmax_pert 
+
+
+  !! perturbed zone 
+!!$  xmin_pert = -100000.  
+!!$  xmax_pert =  100000.
+!!$  ymin_pert = -100000.  
+!!$  ymax_pert =  100000.
+!!$  zmin_pert = -180000.
+!!$  zmax_pert =  -80000.
+  
+
   radius = dsqrt(x_eval**2 + y_eval**2 + (z_eval+zref)**2)
+
+!!$  if ( x_eval < 10. .and. x_eval > -10. .and. y_eval < 10. .and. y_eval > -10.) then 
+!!$     write(*,*)  z_eval / 1000. , radius / 1000. , 6371 + z_eval/ 1000. , zref 
+!!$  end if
+
   radius = radius / 1000.d0
   r1=radius
 
@@ -216,6 +341,18 @@
   vp_final = vp * 1000.d0
   vs_final = vs * 1000.d0
   rho_final = rho * 1000.d0
+
+  !! add perturbation 
+!!$  if ( x_eval > xmin_pert .and.  x_eval < xmax_pert .and. &
+!!$       y_eval > ymin_pert .and.  y_eval < ymax_pert .and. &
+!!$       z_eval > zmin_pert .and.  z_eval < zmax_pert ) then
+!!$
+!!$     vp_final = 1.1*vp_final
+!!$     vs_final = 1.1*vs_final
+!!$     rho_final = 1.1*rho_final 
+!!$
+!!$  end if
+
 
   contains
 
@@ -230,3 +367,5 @@
     end function Interpol
 
   end subroutine model_1D_coupling
+
+

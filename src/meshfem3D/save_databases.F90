@@ -479,7 +479,7 @@
     ! for axisem coupling case  ( only serial case for mesher use scotch after)
     integer, parameter :: myrank = 0
     integer   :: nlayer  !! (number of layer in the 1D model)
-    integer   :: npcoef   !! (number of coeffs in polynomials
+    integer   :: npcoef   !! (number of coeffs in polynomials 
     double precision, parameter :: GAUSSALPHA = 0.d0, GAUSSBETA = 0.d0
     double precision   :: rotation_matrix(3,3)
     double precision, dimension(:), allocatable    :: zlayer
@@ -701,7 +701,7 @@
        end do
        close(88)
 
-       !! write info about box position for generate_databases -----
+       !! write info about box position for generate_databases ----- 
        open(88,file='DATA/meshed_chunk_info.txt')
        !z_bottom = minval(zgrid(:,:,:,:))
        write(88,*) radius_of_box_top
@@ -1121,3 +1121,4 @@
     endif
 
   end subroutine save_output_mesh_files_as_cubit
+
