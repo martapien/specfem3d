@@ -855,7 +855,7 @@
   double precision ANGULAR_WIDTH_ETA_RAD, ANGULAR_WIDTH_XI_RAD, Z_DEPTH_BLOCK, UTM_X_MIN, UTM_X_MAX
   double precision lat_center_chunk, lon_center_chunk, chunk_depth, chunk_azi
   double precision deg2rad
-  double precision x, y, z, px, py, pz, z_bottom
+  double precision x, y, z, px, py, pz, z_bottom, z_top
 
   double precision rotation_matrix(3,3)
   double precision zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4)
@@ -1251,7 +1251,7 @@
 !
 
   ilayer    = 0
-  index_mat = 0
+  index_mat = 1
 
   do iz = 0, nel_depth - 1
 
@@ -1260,16 +1260,17 @@
      if (iz /= 0) then
         if (current_layer(iz-1) /= current_layer(iz)) then
            izshift   = izshift + 1 ! point is repeated on the interface for DSM
-           index_mat = index_mat - 1
-           write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
-                '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
+           !index_mat = index_mat - 1
+!!$           write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
+!!$                '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
+           write(86, '(2i6,5f15.5,i6)') 1, 1, .29, 5.8, 3.6,  ,9999.,9999.,0
         endif
 
      else
 !       We write the first material
-        index_mat = index_mat - 1
-        write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
-             '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
+!!$        index_mat = index_mat - 1
+!!$        write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
+!!$             '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
      endif
 
      do ilat=0,nel_lat-1
@@ -1494,8 +1495,12 @@
   call write_stzmin(lon_zmin,lat_zmin,nlon_dsm,nlat_dsm,MESH)
   !
 
-  z_bottom = minval(zgrid(:,:,:,:))
-  zgrid(:,:,:,:) = zgrid(:,:,:,:) - z_bottom
+!!$  z_bottom = minval(zgrid(:,:,:,:))
+!!$  zgrid(:,:,:,:) = zgrid(:,:,:,:) - z_bottom
+  
+  z_top = maxval(zgrid(:,:,:,:))
+  zgrid(:,:,:,:) = z_top - zgrid(:,:,:,:)
+
   UTM_X_MIN=minval(xgrid)
   UTM_X_MAX=maxval(xgrid)
  ! modele 1D
@@ -1507,8 +1512,8 @@
      write(88,'(4f20.10)') vsv(i,:)
      write(88,'(4f20.10)') density(i,:)
   enddo
-  write(88,*)  z_bottom
-  write(88,*)  lon_center_chunk,  lat_center_chunk,  chunk_azi
+  !write(88,*)  z_bottom
+  !write(88,*)  lon_center_chunk,  lat_center_chunk,  chunk_azi
   close(88)
 
   !---------------- NUMEROTATION DES POINTS DE LA GRILLE ----
