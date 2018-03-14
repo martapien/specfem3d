@@ -1263,7 +1263,7 @@
            !index_mat = index_mat - 1
 !!$           write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
 !!$                '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
-           write(86, '(2i6,5f15.5,i6)') 1, 1, 2.9, 5.8, 3.6,  ,9999.,9999.,0
+           write(86, '(2i6,5f15.5,i6)') 1, 1, 2.9, 5.8, 3.6, 9999., 9999.,0
         endif
 
      else
