@@ -253,6 +253,10 @@
   integer, parameter :: INSTASEIS_INJECTION_BOX_LOCATION_SOURCE     = 2
   integer, parameter :: INSTASEIS_INJECTION_BOX_LOCATION_DEPTH      = 3
 
+  integer, parameter :: INSTASEIS_INPUT_DUMP_TRUE = 1
+  integer, parameter :: INSTASEIS_INPUT_DUMP_FALSE = 0
+
+
 ! Big storage version of coupling with DSM (will always set to .false. after the light storage version will be validated)
   logical, parameter :: old_DSM_coupling_from_Vadim = .true.
 
