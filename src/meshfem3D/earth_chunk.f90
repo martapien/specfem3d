@@ -1499,7 +1499,7 @@
 !!$  zgrid(:,:,:,:) = zgrid(:,:,:,:) - z_bottom
   
   z_top = maxval(zgrid(:,:,:,:))
-  zgrid(:,:,:,:) = z_top - zgrid(:,:,:,:)
+  zgrid(:,:,:,:) = zgrid(:,:,:,:) - z_top
 
   UTM_X_MIN=minval(xgrid)
   UTM_X_MAX=maxval(xgrid)
