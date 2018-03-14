@@ -294,18 +294,18 @@
       call flush_IMAIN()
     endif
 
-    !! VM VM : new way to mesh and store mesh in geocubit format
-    if (myrank == 0) then  !! serial mesh and use decompose_mesh after
-       call mesh_chunk_earth()
-       write(*,*) 'Done creating a chunk of the earth Mesh (HEX8 elements), see directory MESH/'
-    endif
-
-    ! make sure everybody is synchronized
-    call synchronize_all()
-
-    ! stop program
-    call finalize_mpi()
-    stop
+!    !! VM VM : new way to mesh and store mesh in geocubit format
+!    if (myrank == 0) then  !! serial mesh and use decompose_mesh after
+!       call mesh_chunk_earth()
+!       write(*,*) 'Done creating a chunk of the earth Mesh (HEX8 elements), see directory MESH/'
+!    endif
+!
+!    ! make sure everybody is synchronized
+!    call synchronize_all()
+!
+!    ! stop program
+!    call finalize_mpi()
+!    stop
 
     !call bcast_input_param_to_all()
     !call read_mesh_parameter_file()
@@ -332,6 +332,7 @@
 
     ! make sure everybody is synchronized
     call synchronize_all()
+    stop
   endif
 
   ! read the mesh parameter file (Data/meshfem3D_files/Mesh_Par_file)

@@ -54,6 +54,7 @@
 
   !! gaussain perturbation definition
   double precision :: sx, sy, sz
+  double precision :: Ampl_pert_vp_read, Ampl_pert_vs_read, Ampl_pert_rho_read
   double precision :: Ampl_pert_vp, Ampl_pert_vs, Ampl_pert_rho
   double precision :: x_center_gauss, y_center_gauss, z_center_gauss
 
@@ -101,7 +102,7 @@
   subroutine read_model_for_coupling_or_chunk()
 
   use model_coupled_par !! VM VM custom subroutine for coupling with DSM
-  use shared_parameters, only:  ANISOTROPY, ATTENUATION
+  use shared_parameters, only:  ANISOTROPY, ATTENUATION, ADD_GAUSSIAN_PERT_ABSOLUTE
 
   implicit none
 
@@ -115,7 +116,7 @@
   logical            :: buried_box
   integer            :: nel_lat, nel_lon, nel_depth
 
-  !! reading chunk parameters 
+  !! reading chunk parameters
   open(27,file='MESH/ParFileMeshChunk',action='read')
   read(27,'(a)') line
   read(27,*) ANGULAR_WIDTH_XI_RAD, ANGULAR_WIDTH_ETA_RAD
@@ -137,23 +138,23 @@
      radius_of_box_top = 6371000.
   endif
   close(27)
- 
+
   OLON = lon_center_chunk
   OLAT = lat_center_chunk
   ZREF = radius_of_box_top
 
   !write(*,*) " Reading 1D model "
 
-  !! reading 1D reference model given by polynomial coeffiscients 
-  if (ANISOTROPY) then 
-     
-     !! read aniso model 
+  !! reading 1D reference model given by polynomial coeffiscients
+  if (ANISOTROPY) then
+
+     !! read aniso model
      write(*,*) " external 1D anisotropic model not defined yet "
      stop
 
-     if (ATTENUATION) then 
+     if (ATTENUATION) then
         !! TO DO  ...
-        !! read 1D model with attenuation 
+        !! read 1D model with attenuation
         write(*,*) " external 1D vsico-elastic model not defined yet "
         stop
 
@@ -163,16 +164,16 @@
 
   else
 
-     if (ATTENUATION) then 
+     if (ATTENUATION) then
 
         !! TO DO  ...
-        !! read 1D model with attenuation 
+        !! read 1D model with attenuation
         write(*,*) " external 1D vsico-elastic model not defined yet "
         stop
 
      else
 
-        !! isotropic 1D model: 
+        !! isotropic 1D model:
         filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//trim(model1D_file)
         open(27,file=trim(filename))
         read(27,*) nlayer,ncoeff
@@ -193,19 +194,37 @@
   end if
 
 
+  if (ADD_GAUSSIAN_PERT_ABSOLUTE) then
+    !! MPC reading gaussian pert parameters
+    open(27,file='MESH/ParFileGaussianPert',action='read')
+    read(27, '(a)') line
+    read(27, '(a)') line
+    read(27, *)     x_center_gauss, y_center_gauss, z_center_gauss
+    read(27, '(a)') line
+    read(27, *)     sx, sy, sz
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_vp_read
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_vs_read
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_rho_read
+    close(27)
 
- 
-   
+    Ampl_pert_vp  = dble(Ampl_pert_vp_read)
+    Ampl_pert_vs  = dble(Ampl_pert_vs_read)
+    Ampl_pert_rho = dble(Ampl_pert_rho_read)
+  endif
+
   !! hardcoded gaussian pert (todo need to read an input file)
-  x_center_gauss=0.
-  y_center_gauss=0. 
-  z_center_gauss=-100000.
-  sx=30000.
-  sy=30000.
-  sz=25000.
-  Ampl_pert_vp=500.d0 !! absolute amplitude perturbation
-  Ampl_pert_vs=200.d0
-  Ampl_pert_rho=200.d0
+  !! x_center_gauss=0.
+  !! y_center_gauss=0.
+  !! z_center_gauss=-100000.
+  !! sx=100000.
+  !! sy=100000.
+  !! sz=50000.
+  !! Ampl_pert_vp=1000.d0 !! abs olute amplitude perturbation
+  !! Ampl_pert_vs=400.d0
+  ! Ampl_pert_rho=400.d0
 
   end subroutine read_model_for_coupling_or_chunk
 
@@ -242,7 +261,7 @@
 
   use constants, only: CUSTOM_REAL
 
-  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH
+  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, MESH_A_CHUNK_OF_THE_EARTH, ADD_GAUSSIAN_PERT_ABSOLUTE
 
   implicit none
 
@@ -270,8 +289,9 @@
   call  model_1D_coupling(x,y,z,rho,vp,vs,radius)
 
 
-  !! hardcoded gaussaian paerturbation : 
-  call add_gaussian_pert(x, y, z, rho, vp, vs)
+  if (ADD_GAUSSIAN_PERT_ABSOLUTE) then
+      call add_gaussian_pert(x, y, z, rho, vp, vs)
+  endif
 
   end subroutine model_coupled_values
 
@@ -288,7 +308,7 @@
     double precision                      :: gauss_value
 
     gauss_value = exp( -0.5d0 * (    ((x - x_center_gauss) / sx)**2 + &
-                                     ((y - y_center_gauss) / sy)**2 + & 
+                                     ((y - y_center_gauss) / sy)**2 + &
                                      ((z - z_center_gauss) / sz)**2) )
 
     vp = vp + Ampl_pert_vp * gauss_value
@@ -311,22 +331,22 @@
 
   double precision, parameter :: Xtol = 1d-2
 
-  double precision :: xmin_pert, xmax_pert, ymin_pert, ymax_pert, zmin_pert, zmax_pert 
+  double precision :: xmin_pert, xmax_pert, ymin_pert, ymax_pert, zmin_pert, zmax_pert
 
 
-  !! perturbed zone 
-!!$  xmin_pert = -100000.  
+  !! perturbed zone
+!!$  xmin_pert = -100000.
 !!$  xmax_pert =  100000.
-!!$  ymin_pert = -100000.  
+!!$  ymin_pert = -100000.
 !!$  ymax_pert =  100000.
 !!$  zmin_pert = -180000.
 !!$  zmax_pert =  -80000.
-  
+
 
   radius = dsqrt(x_eval**2 + y_eval**2 + (z_eval+zref)**2)
 
-!!$  if ( x_eval < 10. .and. x_eval > -10. .and. y_eval < 10. .and. y_eval > -10.) then 
-!!$     write(*,*)  z_eval / 1000. , radius / 1000. , 6371 + z_eval/ 1000. , zref 
+!!$  if ( x_eval < 10. .and. x_eval > -10. .and. y_eval < 10. .and. y_eval > -10.) then
+!!$     write(*,*)  z_eval / 1000. , radius / 1000. , 6371 + z_eval/ 1000. , zref
 !!$  end if
 
   radius = radius / 1000.d0
@@ -342,14 +362,14 @@
   vs_final = vs * 1000.d0
   rho_final = rho * 1000.d0
 
-  !! add perturbation 
+  !! add perturbation
 !!$  if ( x_eval > xmin_pert .and.  x_eval < xmax_pert .and. &
 !!$       y_eval > ymin_pert .and.  y_eval < ymax_pert .and. &
 !!$       z_eval > zmin_pert .and.  z_eval < zmax_pert ) then
 !!$
 !!$     vp_final = 1.1*vp_final
 !!$     vs_final = 1.1*vs_final
-!!$     rho_final = 1.1*rho_final 
+!!$     rho_final = 1.1*rho_final
 !!$
 !!$  end if
 
@@ -367,5 +387,3 @@
     end function Interpol
 
   end subroutine model_1D_coupling
-
-

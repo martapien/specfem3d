@@ -75,9 +75,10 @@
   ispec_is_poroelastic(:) = .false.
 
   ! prepares tomographic models if needed for elements with undefined material definitions
-#ifndef DEBUG_COUPLED
-  if (nundefMat_ext_mesh > 0 .or. IMODEL == IMODEL_TOMO) call model_tomography_broadcast(myrank)
-#endif
+!#ifndef DEBUG_COUPLED
+!  write(*, *) "XXXXXXXXXXXXX"
+!  if (nundefMat_ext_mesh > 0 .or. IMODEL == IMODEL_TOMO) call model_tomography_broadcast(myrank)
+!#endif
 
   ! prepares external model values if needed
   select case (IMODEL)
@@ -392,9 +393,9 @@
   call any_all_l( ANY(ispec_is_poroelastic), POROELASTIC_SIMULATION )
 
   ! deallocates tomographic arrays
-#ifndef DEBUG_COUPLED
-  if ( (nundefMat_ext_mesh > 0 .or. IMODEL == IMODEL_TOMO) ) call deallocate_tomography_files()
-#endif
+!#ifndef DEBUG_COUPLED
+!  if ( (nundefMat_ext_mesh > 0 .or. IMODEL == IMODEL_TOMO) ) call deallocate_tomography_files()
+!#endif
 
   end subroutine get_model
 

@@ -424,11 +424,12 @@
                                      xgrid,ygrid,zgrid)
 
   use constants, only: MAX_STRING_LEN,IDOMAIN_ACOUSTIC,IDOMAIN_ELASTIC, NGLLX, NGLLY, NGLLZ, NDIM, ZERO, &
-    INJECTION_TECHNIQUE_IS_AXISEM, INJECTION_TECHNIQUE_IS_INSTASEIS
+    INJECTION_TECHNIQUE_IS_AXISEM, INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INPUT_DUMP_TRUE
 
   use HDF5
 
-  use shared_parameters, only: NGNOD,COUPLE_WITH_INJECTION_TECHNIQUE,INJECTION_TECHNIQUE_TYPE
+  use shared_parameters, only: NGNOD,COUPLE_WITH_INJECTION_TECHNIQUE, &
+      INJECTION_TECHNIQUE_TYPE, INSTASEIS_INPUT_DUMP
 
     implicit none
 
@@ -479,7 +480,7 @@
     ! for axisem coupling case  ( only serial case for mesher use scotch after)
     integer, parameter :: myrank = 0
     integer   :: nlayer  !! (number of layer in the 1D model)
-    integer   :: npcoef   !! (number of coeffs in polynomials 
+    integer   :: npcoef   !! (number of coeffs in polynomials
     double precision, parameter :: GAUSSALPHA = 0.d0, GAUSSBETA = 0.d0
     double precision   :: rotation_matrix(3,3)
     double precision, dimension(:), allocatable    :: zlayer
@@ -701,7 +702,7 @@
        end do
        close(88)
 
-       !! write info about box position for generate_databases ----- 
+       !! write info about box position for generate_databases -----
        open(88,file='DATA/meshed_chunk_info.txt')
        !z_bottom = minval(zgrid(:,:,:,:))
        write(88,*) radius_of_box_top
@@ -711,7 +712,8 @@
         ! compute rotation matrix
        call compute_rotation_matrix(rotation_matrix,lon_center_chunk,lat_center_chunk, chunk_azi)
 
-       if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) then
+       if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS .and. &
+            INSTASEIS_INPUT_DUMP == INSTASEIS_INPUT_DUMP_TRUE) then
          !! MPC save rotation matrix to a file
          !! MPC remember that everytihng gets transposed when dumped to hdf5!
          allocate(rotmat_transpose(3, 3))
@@ -1121,4 +1123,3 @@
     endif
 
   end subroutine save_output_mesh_files_as_cubit
-

@@ -395,9 +395,9 @@
 
   use create_regions_mesh_ext_par
 
-  use constants, only: INJECTION_TECHNIQUE_IS_INSTASEIS
+  use constants, only: INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INPUT_DUMP_TRUE
   use shared_parameters, only: NPROC, COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH, &
-    INJECTION_TECHNIQUE_TYPE, NSTEP
+    INJECTION_TECHNIQUE_TYPE, NSTEP, INSTASEIS_INPUT_DUMP
 
   implicit none
 
@@ -905,7 +905,8 @@
 
 
     call synchronize_all()
-    if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) then
+    if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS .and. &
+          INSTASEIS_INPUT_DUMP == INSTASEIS_INPUT_DUMP_TRUE) then
       !! MPC write a hdf5 file for Instaseis input
       ! Initialize hdf5 interface
       call h5open_f(error)

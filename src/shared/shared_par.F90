@@ -159,9 +159,11 @@ end module constants
   logical :: COUPLE_WITH_INJECTION_TECHNIQUE
   integer :: INJECTION_TECHNIQUE_TYPE
   integer :: INSTASEIS_INJECTION_BOX_LOCATION
+  integer :: INSTASEIS_INPUT_DUMP
   character(len=MAX_STRING_LEN) :: TRACTION_PATH
   character(len=MAX_STRING_LEN) :: FKMODEL_FILE
   logical :: MESH_A_CHUNK_OF_THE_EARTH
+  logical :: ADD_GAUSSIAN_PERT_ABSOLUTE
   logical :: RECIPROCITY_AND_KH_INTEGRAL
 
   end module shared_input_parameters
