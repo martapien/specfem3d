@@ -639,8 +639,8 @@
   call write_stzmin(lon_zmin,lat_zmin,nlon_dsm,nlat_dsm,MESH)
   !
   
-  z_top = maxval((zgrid(:,:,:,:))
-  zgrid(:,:,:,:) = zgrid(:,:,:,:) -  ztop
+  z_top = maxval(zgrid(:,:,:,:))
+  zgrid(:,:,:,:) = zgrid(:,:,:,:) -  z_top
   !z_bottom = minval(zgrid(:,:,:,:))
   !zgrid(:,:,:,:) = zgrid(:,:,:,:) - z_bottom
   UTM_X_MIN=minval(xgrid)
