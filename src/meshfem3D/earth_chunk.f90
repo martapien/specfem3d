@@ -133,7 +133,7 @@
   integer(hid_t) :: aspace_radius_id        ! Attribute dataspace identifier
   integer :: radius_rank = 1                        ! Attribure rank
   integer(hsize_t), dimension(1) :: radius_dims     ! Attribute dimension
-  real :: radius_of_box_top = 6371.0
+  real :: radius_of_box_top = 6371000.0
 !! Unused
 !
 ! integer iii, jjj, kkk,
@@ -902,7 +902,7 @@
   integer(hid_t) :: aspace_radius_id        ! Attribute dataspace identifier
   integer :: radius_rank = 1                        ! Attribure rank
   integer(hsize_t), dimension(1) :: radius_dims     ! Attribute dimension
-  real :: radius_of_box_top = 6371.0
+  real :: radius_of_box_top = 6371000.0
 !
 !--- WARNING, CONVENTION : (lon,lat) -> (xi,eta)
 !---                       (k = 6 with -z for the mapping of the cubic sphere, cf Chevrot 2012)

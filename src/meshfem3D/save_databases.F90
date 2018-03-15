@@ -668,7 +668,7 @@
 
        open(90, file='MESH/ParFileMeshChunk',action='read')
        read(90,'(a)') line
-       read(90,*) ANGULAR_WIDTH_XI_RAD, ANGULAR_WIDTH_ETA_RAD
+       read(90,*) ANGULAR_WIDTH_XI_RAD, ANGULAR_WIDTH_ETA_RAD ! MPC in degrees not rad!
        read(90,'(a)') line
        read(90,*) lon_center_chunk, lat_center_chunk, chunk_azi
        read(90,'(a)') line
