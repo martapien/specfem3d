@@ -1684,7 +1684,7 @@
   enddo
   close(27)
 
-  open(27,file=trim(MESH)//'free_surface')
+  open(27,file=trim(MESH)//'free_or_absorbing_surface_file_zmax')
   write(27,*) ispec2Dzmax
   do ispec=1,nspec
      if (iboun(6,ispec)) write(27,'(10(i10,1x))') ispec, &
