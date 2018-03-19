@@ -28,13 +28,12 @@ if rank == 0:
     # define paths relative to path_to_par
     path_to_source_par = path_to_par + '/source.par'
     path_to_coupling_pars = path_to_par + '/coupling.par'
-    path_to_hdf5 = path_to_par + '/../gll_coordinates.hdf5'
 
     # read from coupling.par
     f_cpl = open(path_to_coupling_pars, 'r')
-    lines = f_cpl.readlines()
+    lines_cpl = f_cpl.read().splitlines()
     f_cpl.close()
-    lines_cpl = list(filter(None, (line.split('#')[0].strip() for line in lines)))
+    #lines_cpl = list(filter(None, (line.split('#')[0].strip() for line in lines)))
     cpl_dict = {i: lines_cpl[i] for i in range(0, len(lines_cpl))}
 
     # Read from source.par file
@@ -47,19 +46,20 @@ if rank == 0:
 else:
     cpl_dict = None
     src_dict = None
-    path_to_hdf5 = None
+    #path_to_hdf5 = None
 
 cpl_dict = comm.bcast(cpl_dict, root=0)
 src_dict = comm.bcast(src_dict, root=0)
-path_to_hdf5 = comm.bcast(path_to_hdf5, root=0)
+#path_to_hdf5 = comm.bcast(path_to_hdf5, root=0)
 
-outputfile = os.path.join(WORK_DIR, cpl_dict[7])
-fwd_db_path = cpl_dict[10]
-fmin = cpl_dict[13]
-fmax = cpl_dict[14]
-dt = float(cpl_dict[15])
-tmin = cpl_dict[16]
-tmax = cpl_dict[17]
+path_to_hdf5 = os.path.join(WORK_DIR, cpl_dict[1].rstrip())
+outputfile = os.path.join(WORK_DIR, cpl_dict[9].rstrip())
+fwd_db_path = cpl_dict[15].rstrip()
+fmin = cpl_dict[21].rstrip()
+fmax = cpl_dict[23].rstrip()
+dt = float(cpl_dict[25])
+tmin = cpl_dict[27].rstrip()
+tmax = cpl_dict[29].rstrip()
 
 if rank == 0:
     print("Instaseis:")

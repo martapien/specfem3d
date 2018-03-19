@@ -21,12 +21,12 @@ WORK_DIR = os.getcwd()
 path_to_coupling_pars = path_to_par + '/coupling.par'
 # read from coupling.par
 f_cpl = open(path_to_coupling_pars, 'r')
-lines = f_cpl.readlines()
+lines_cpl = f_cpl.read().splitlines()
 f_cpl.close()
-lines_cpl = list(filter(None, (line.split('#')[0].strip() for line in lines)))
+#lines_cpl = list(filter(None, (line.split('#')[0].strip() for line in lines)))
 
-fwd_db_path = lines_cpl[10]
-coordsfile = os.path.join(WORK_DIR, lines_cpl[0])
+fwd_db_path = lines_cpl[15].rstrip()
+coordsfile = os.path.join(WORK_DIR, lines_cpl[1].rstrip())
 
 # ------ read src parameters --------
 path_to_source_par = path_to_par + '/source.par'
@@ -50,7 +50,7 @@ source = instaseis.Source(
      m_rt=m_rt, m_rp=m_rp, m_tp=m_tp)
 
 
-instaseis.hybrid_get_elastic_params_parallel(source, coordsfile, 
+instaseis.hybrid_get_elastic_params_parallel(source, coordsfile,
                                              fwd_db_path)
 
 if rank == 0:

@@ -15,17 +15,11 @@ program re_format_hdf5
   !integer, dimension(MPI_STATUS_SIZE) :: statut
 
   ! To read from coupling.par file
-  character(len=500) meshdirectory
+  character(len=100) line
+  character(len=500) meshfem_hdf5_file, hdf5_specfem_output
   character(len=500) LOCAL_PATH, TRACT_PATH
-  character(len=500) hdf5_file_uncompressed, hdf5_file_compressed
-  character(len=500) fields_hdf5_file, meshfem_hdf5_file, hdf5_specfem_output
-  character(len=500) fwd_db_path, bwd_db_path, output_dir
-
-  real lat_src, lon_src
-  real lat_mesh, lon_mesh, azi_rot
+  character(len=500) hdf5_file_uncompressed, hdf5_file_compressed, fields_hdf5_file
   integer nSpecfem_proc
-  character(len=50) frq_min, frq_max, tmin, tmax
-  real dt
 
   ! vr and tr for every time step itime, but for all rec at once
   real, allocatable :: vr(:, :), tr(:, :)
@@ -104,39 +98,28 @@ program re_format_hdf5
 
   if (myrank == 0) then
     open(10,file='./Inputs_Instaseis_Coupling/coupling.par')
+    read(10,'(a)') line
     read(10,'(a)') meshfem_hdf5_file        !! meshfem3D bd points (cartesian)
-    read(10,*) nSpecfem_proc                !! number of specfem procs
-    read(10,*) lat_src, lon_src             !! axisem source position
-    read(10,*) lat_mesh, lon_mesh, azi_rot  !! mesh center position
-    read(10,'(a)') meshdirectory            !! mesfem3D results
-    read(10,'(a)') LOCAL_PATH               !! specfem database path
-    read(10,'(a)') TRACT_PATH               !! path where we save vr&tr
-    read(10,'(a)') hdf5_file_uncompressed   !! path of hdf5 file to read
-    read(10,'(a)') hdf5_file_compressed     !! path of hdf5 file to read
+    read(10,'(a)') line
     read(10,'(a)') hdf5_specfem_output      !! path of hdf5 file (not used here)
-    read(10,'(a)') fwd_db_path              !! path of fwd db (not used here)
-    read(10,'(a)') bwd_db_path              !! path of bwd db (not used here)
-    read(10,'(a)') output_dir               !! path of output dir (not used here)
-    read(10,*) frq_min                      !! filter freq (not used here)
-    read(10,*) frq_max                      !! filter freq (not used here)
-    read(10,*) dt                           !! dt specfem simu (not used here)
-    read(10,*) tmin                         !! tmin (not used here)
-    read(10,*) tmax                         !! tmax (not used here)
+    read(10,'(a)') line
+    read(10,'(a)') LOCAL_PATH               !! specfem database path
+    read(10,'(a)') line
+    read(10,'(a)') TRACT_PATH               !! path where we save vr&tr
+    read(10,'(a)') line
+    read(10,'(a)') hdf5_file_uncompressed   !! path of hdf5 file to read
+    read(10,'(a)') line
+    read(10,'(a)') hdf5_file_compressed     !! path of hdf5 file to read
+    read(10,'(a)') line
+    read(10,*) nSpecfem_proc                !! number of specfem procs
     close(10)
-
-    call trim_string(meshdirectory)
-    call trim_string(LOCAL_PATH)
-    call trim_string(TRACT_PATH)
-    call trim_string(fwd_db_path)
-    call trim_string(bwd_db_path)
     fields_hdf5_file = hdf5_file_compressed
-    call trim_string(fields_hdf5_file)
-    call trim_string(meshfem_hdf5_file)
 
     ! MPC to do define the read here by chunk size in hdf5
     !open(27,file='./Inputs_Instaseis_Coupling/chunking.par')
     !read(27, *) chunk_size
     !close(27)
+
   endif !! myrank == 0
 
   call mpi_bcast(nSpecfem_proc, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
@@ -158,7 +141,7 @@ program re_format_hdf5
   ! Open existing hdf5 file
   call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
   call h5pset_fapl_mpio_f(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL, error)
-  call h5fopen_f(meshfem_hdf5_file, &
+  call h5fopen_f(trim(meshfem_hdf5_file), &
                  H5F_ACC_RDONLY_F, coords_file_id, error, &
                  access_prp = plist_id)
   call h5pclose_f(plist_id, error)
@@ -211,7 +194,7 @@ program re_format_hdf5
   ! Open existing hdf5 file
   call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id2, error)
   call h5pset_fapl_mpio_f(plist_id2, MPI_COMM_WORLD, MPI_INFO_NULL, error)
-  call h5fopen_f(fields_hdf5_file, &
+  call h5fopen_f(trim(fields_hdf5_file), &
                 H5F_ACC_RDONLY_F, fields_file_id, error, &
                 access_prp = plist_id2)
   call h5pclose_f(plist_id2, error)

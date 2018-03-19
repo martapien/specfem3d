@@ -36,7 +36,7 @@
     INJECTION_TECHNIQUE_IS_DSM, INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INPUT_DUMP_TRUE
 
   use shared_parameters, only: INJECTION_TECHNIQUE_TYPE, INSTASEIS_INPUT_DUMP
-  use HDF5 
+  use HDF5
 
   implicit none
 
@@ -58,7 +58,7 @@
 !
 
   integer, parameter :: myrank = 0
-  integer, parameter :: nlayer = 12 !! (number of layer in the model iasp91, or ak135, or prem (one more layer than the model)
+  integer :: nlayer !! (number of layer in the model iasp91, or ak135, or prem (one more layer than the model)
 
   double precision, parameter :: GAUSSALPHA = 0.d0, GAUSSBETA = 0.d0
 
@@ -87,7 +87,9 @@
   double precision x, y, z, px, py, pz, z_bottom, z_top
 
   double precision rotation_matrix(3,3)
-  double precision zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4)
+  !double precision zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4)
+  double precision, allocatable :: zlayer(:), vpv(:, :), vsv(:, :), density(:, :)
+
   double precision xelm(NGNOD), yelm(NGNOD), zelm(NGNOD)
   double precision xstore(NGLLX,NGLLY,NGLLZ), ystore(NGLLX,NGLLY,NGLLZ), zstore(NGLLX,NGLLY,NGLLZ)
 
@@ -116,7 +118,7 @@
   character(len=250) model1D_file
 
   character(len=10), parameter :: MESH = "./MESH/"
-  character(len=21), parameter :: hdf5_file = "gll_coordinates.hdf5" ! File name
+  character(len=500) :: hdf5_file ! File name
   character(len=5),  parameter :: grp_local = "local"
   character(len=22), parameter :: attr_rotmat = "rotmat_xyz_loc_to_glob"
   integer(hid_t) :: file_id           ! File identifier
@@ -288,6 +290,15 @@
 
   if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS .and. &
        INSTASEIS_INPUT_DUMP == INSTASEIS_INPUT_DUMP_TRUE) then
+
+    if (myrank == 0) then
+      open(10,file='./Inputs_Instaseis_Coupling/coupling.par')
+      read(10,'(a)') line
+      read(10,'(a)') hdf5_file        !! meshfem3D bd points (cartesian)
+      close(10)
+    endif !! myrank == 0
+
+    call bcast_all_ch_array(hdf5_file,1,500)
     !! MPC save rotation matrix to a file
     !! MPC remember that everytihng gets transposed when dumped to hdf5!
     allocate(rotmat_transpose(3, 3))
@@ -298,7 +309,7 @@
     ! Initialize hdf5 interface
     call h5open_f(error)
     ! Create the file collectively.
-    call h5fcreate_f(hdf5_file, H5F_ACC_TRUNC_F, file_id, error)
+    call h5fcreate_f(trim(hdf5_file), H5F_ACC_TRUNC_F, file_id, error)
     ! Create new groups
     call h5gcreate_f(file_id, grp_local, grp_local_id, error)
     call h5screate_simple_f(rotmat_rank, rotmat_dims, aspace_rotmat_id, error)
@@ -327,7 +338,8 @@
 !
 !--- call ReadIasp91(vpv,vsv,density,zlayer,nlayer)
 !
-
+  call Read_dsm_nlayer(model1D_file, nlayer)
+  allocate(zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4))
   call Read_dsm_model(model1D_file,vpv,vsv,density,zlayer,nlayer)
 
 !
@@ -417,7 +429,7 @@
 !!$           index_mat = index_mat - 1
 !!$           write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
 !!$                '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
-           !! fictious hardecoded material, not used but just for to have input file 
+           !! fictious hardecoded material, not used but just for to have input file
            !! because genereate_databases will read it anyway.
            write(86, '(2i6,5f15.5,i6)') 2, 1, 2.9, 5.8, 3.6  ,9999.,9999.,0
         endif
@@ -638,7 +650,7 @@
   ! ecriture de stzmin
   call write_stzmin(lon_zmin,lat_zmin,nlon_dsm,nlat_dsm,MESH)
   !
-  
+
   z_top = maxval(zgrid(:,:,:,:))
   zgrid(:,:,:,:) = zgrid(:,:,:,:) -  z_top
   !z_bottom = minval(zgrid(:,:,:,:))
@@ -834,7 +846,7 @@
 !
 
   integer, parameter :: myrank = 0
-  integer, parameter :: nlayer = 10 !! (number of layer in the model iasp91, or ak135, or prem (one more layer than the model)
+  integer :: nlayer !! (number of layer in the model iasp91, or ak135, or prem (one more layer than the model)
 
   double precision, parameter :: GAUSSALPHA = 0.d0, GAUSSBETA = 0.d0
 
@@ -863,7 +875,9 @@
   double precision x, y, z, px, py, pz, z_bottom, z_top
 
   double precision rotation_matrix(3,3)
-  double precision zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4)
+  !double precision zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4)
+  double precision, allocatable :: zlayer(:), vpv(:, :), vsv(:, :), density(:, :)
+
   double precision xelm(NGNOD), yelm(NGNOD), zelm(NGNOD)
   double precision xstore(NGLLX,NGLLY,NGLLZ), ystore(NGLLX,NGLLY,NGLLZ), zstore(NGLLX,NGLLY,NGLLZ)
 
@@ -889,8 +903,8 @@
   character(len=250) model1D_file
 
   character(len=10), parameter :: MESH = "./MESH/"
-  
-  character(len=21), parameter :: hdf5_file = "gll_coordinates.hdf5" ! File name
+
+  character(len=500) :: hdf5_file ! File name
   character(len=5),  parameter :: grp_local = "local"
   character(len=22), parameter :: attr_rotmat = "rotmat_xyz_loc_to_glob"
   integer(hid_t) :: file_id           ! File identifier
@@ -1143,6 +1157,15 @@
   call compute_rotation_matrix(rotation_matrix, lon_center_chunk,lat_center_chunk, chunk_azi)
        if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS .and. &
             INSTASEIS_INPUT_DUMP == INSTASEIS_INPUT_DUMP_TRUE) then
+
+         if (myrank == 0) then
+           open(10,file='./Inputs_Instaseis_Coupling/coupling.par')
+           read(10,'(a)') line
+           read(10,'(a)') hdf5_file        !! meshfem3D bd points (cartesian)
+           close(10)
+         endif !! myrank == 0
+
+         call bcast_all_ch_array(hdf5_file,1,500)
          !! MPC save rotation matrix to a file
          !! MPC remember that everytihng gets transposed when dumped to hdf5!
          allocate(rotmat_transpose(3, 3))
@@ -1181,7 +1204,8 @@
 !
 !--- call ReadIasp91(vpv,vsv,density,zlayer,nlayer)
 !
-
+  call Read_dsm_nlayer(model1D_file, nlayer)
+  allocate(zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4))
   call Read_dsm_model(model1D_file,vpv,vsv,density,zlayer,nlayer)
 
 !
@@ -1502,7 +1526,7 @@
 
 !!$  z_bottom = minval(zgrid(:,:,:,:))
 !!$  zgrid(:,:,:,:) = zgrid(:,:,:,:) - z_bottom
-  
+
   z_top = maxval(zgrid(:,:,:,:))
   zgrid(:,:,:,:) = zgrid(:,:,:,:) - z_top
 
@@ -1707,70 +1731,70 @@
 
 !=======================================================================================================!
 
-  subroutine earth_chunk_ReadIasp91(vp,vs,rho,rb,n)
-
-  implicit none
-
-  integer i,j,n,iunit,nlay,nco(n),ifanis
-  double precision vp(n,4),vs(n,4),rho(n,4),rb(n)
-  real fref,vph,vsh,qm,qk,eta
-
-  character(len=80) text
-  character(len=2) cnlay
-  character(len=11) format_to_use
-
-  do i=1,n
-     !qm(i)=0.d0
-        !qk(i)=0.d0
-     rb(i)=0.d0
-     !iflso(i)=0
-     nco(i)=0
-     do j=1,4
-        rho(i,j)=0.d0
-        vp(i,j)=0.d0
-        !vph(i,j)=0.d0
-        vs(i,j)=0.d0
-        !vsh(i,j)=0.d0
-        !eta(i,j)=0.d0
-     enddo
-  enddo
-  iunit=26
-  open(unit=iunit,file='iasp91',status='old')
-
-1 read(iunit,'(a72)') text
-  if (text(1:1) == '#') then
-     goto 1
-  endif
-  backspace iunit
-
-
-  read(iunit,'(i2)') nlay                ! Number of layers
-
-  write(cnlay,'(i2)') nlay
-  format_to_use='('//cnlay//'i2)'                 ! Number of polynomial
-  read(iunit,format_to_use) (nco(i),i=1,nlay)     ! coefficients for each layer
-
-  read(iunit,*) fref               ! reference frequency of Qs in Hertz
-  read(iunit,*) ifanis             ! Transversal isotropic? 1=y, else=n
-  read(iunit,'(1x/1x/)')
-
-
-  do i = 1, nlay
-
-     read(iunit,*) rb(i),rho(i,1),vp(i,1),vph,vs(i,1),vsh,qm,qk,eta
-     do j = 2, nco(i)
-        read(iunit,*) rho(i,j),vp(i,j),vph,vs(i,j),vsh,eta
-     enddo
-     read(iunit,'(1x)')
-  enddo
-  i = nlay+1
-  read(iunit,*) rb(i)
-  j = 1
-  rho(i,j) =  rho(i-1,j)
-  vp(i,j) = vp(i-1,j)
-  vs(i,j) = vs(i-1,j)
-
-  end subroutine earth_chunk_ReadIasp91
+!   subroutine earth_chunk_ReadIasp91(vp,vs,rho,rb,n)
+!
+!   implicit none
+!
+!   integer i,j,n,iunit,nlay,nco(n),ifanis
+!   double precision vp(n,4),vs(n,4),rho(n,4),rb(n)
+!   real fref,vph,vsh,qm,qk,eta
+!
+!   character(len=80) text
+!   character(len=2) cnlay
+!   character(len=11) format_to_use
+!
+!   do i=1,n
+!      !qm(i)=0.d0
+!         !qk(i)=0.d0
+!      rb(i)=0.d0
+!      !iflso(i)=0
+!      nco(i)=0
+!      do j=1,4
+!         rho(i,j)=0.d0
+!         vp(i,j)=0.d0
+!         !vph(i,j)=0.d0
+!         vs(i,j)=0.d0
+!         !vsh(i,j)=0.d0
+!         !eta(i,j)=0.d0
+!      enddo
+!   enddo
+!   iunit=26
+!   open(unit=iunit,file='iasp91',status='old')
+!
+! 1 read(iunit,'(a72)') text
+!   if (text(1:1) == '#') then
+!      goto 1
+!   endif
+!   backspace iunit
+!
+!
+!   read(iunit,'(i2)') nlay                ! Number of layers
+!
+!   write(cnlay,'(i2)') nlay
+!   format_to_use='('//cnlay//'i2)'                 ! Number of polynomial
+!   read(iunit,format_to_use) (nco(i),i=1,nlay)     ! coefficients for each layer
+!
+!   read(iunit,*) fref               ! reference frequency of Qs in Hertz
+!   read(iunit,*) ifanis             ! Transversal isotropic? 1=y, else=n
+!   read(iunit,'(1x/1x/)')
+!
+!
+!   do i = 1, nlay
+!
+!      read(iunit,*) rb(i),rho(i,1),vp(i,1),vph,vs(i,1),vsh,qm,qk,eta
+!      do j = 2, nco(i)
+!         read(iunit,*) rho(i,j),vp(i,j),vph,vs(i,j),vsh,eta
+!      enddo
+!      read(iunit,'(1x)')
+!   enddo
+!   i = nlay+1
+!   read(iunit,*) rb(i)
+!   j = 1
+!   rho(i,j) =  rho(i-1,j)
+!   vp(i,j) = vp(i-1,j)
+!   vs(i,j) = vs(i-1,j)
+!
+!   end subroutine earth_chunk_ReadIasp91
 
 !
 !===========================================================================
@@ -1819,10 +1843,32 @@
   close(iunit)
 
   end subroutine Read_dsm_model
+  !
+  !===========================================================================
+  !
+
+  subroutine Read_dsm_nlayer(model_file, n)
+
+  implicit none
+
+  integer, intent(inout) :: n
+  integer :: nzone, iunit
+  character(len=250) model_file
+
+  iunit = 26
+
+  open(unit=iunit,file=trim(model_file),status='old',action='read')
+
+  read(iunit,*) nzone
+  close(iunit)
+
+  n = nzone + 1
+  end subroutine Read_dsm_nlayer
 
 !
 !=======================================================================================================
 !
+
 ! compute the Euler angles and the associated rotation matrix
 
   subroutine euler_angles(rotation_matrix,CENTER_LONGITUDE_IN_DEGREES,CENTER_LATITUDE_IN_DEGREES,GAMMA_ROTATION_AZIMUTH)

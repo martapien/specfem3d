@@ -395,9 +395,9 @@
 
   use create_regions_mesh_ext_par
 
-  use constants, only: INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INPUT_DUMP_TRUE
+  use constants, only: INJECTION_TECHNIQUE_IS_INSTASEIS, INSTASEIS_INPUT_DUMP_TRUE, INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER
   use shared_parameters, only: NPROC, COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH, &
-    INJECTION_TECHNIQUE_TYPE, NSTEP, INSTASEIS_INPUT_DUMP
+    INJECTION_TECHNIQUE_TYPE, NSTEP, INSTASEIS_INPUT_DUMP, INSTASEIS_INJECTION_BOX_LOCATION
 
   implicit none
 
@@ -421,7 +421,7 @@
 
   !! MPC HDF5 declarations for Instaseis-Specfem HDF5 dumps
   ! Names (file and HDF5 objects)
-  character(len=20), parameter :: hdf5_file = "gll_coordinates.hdf5" ! File name
+  character(len=500) :: hdf5_file ! File name
   character(len=5),  parameter :: grp_local = "local"
   character(len=18), parameter :: grp_params = "elastic_parameters"
   character(len=18), parameter :: dset_coords = "coordinates"
@@ -484,10 +484,12 @@
   ! And some helpers
   integer, allocatable :: offset_per_proc(:), nb_gll_per_proc(:)
   integer :: nb_gll_myrank, ipoint
+  character(len=100) line
+
 
   !! HDF5 declarations for specfem_dump file
   ! Names (file and HDF5 objects)
-  character(len=17), parameter :: spec_file = "specfem_dump.hdf5"
+  character(len=500) :: spec_file
   character(len=5),  parameter :: grp_coords = "local"
   character(len=19), parameter :: dset_spec_d = "displacement"
   character(len=12), parameter :: dset_spec_s = "strain"
@@ -888,25 +890,38 @@
     enddo
 
     close(IOUT)
-    nbrec = sum(nb_gll_per_proc)
-    ! dimensions for hdf5
-    coords_dimsf(1) = 3
-    coords_dimsf(2) = nbrec
-    params_dimsf(1) = nbrec
-    coords_dimsm(1) = 3
-    coords_dimsm(2) = nb_gll_per_proc(myrank+1)
-    params_dimsm(1) = nb_gll_per_proc(myrank+1)
-    nbrec_dims = (/1/)
-    spec_dims = (/sizeprocs/)
-    coords_countf = (/3, nb_gll_per_proc(myrank+1)/)
-    params_countf = (/nb_gll_per_proc(myrank+1)/)
-    coords_offsetf = (/0, offset_per_proc(myrank+1)/)
-    params_offsetf = (/offset_per_proc(myrank+1)/)
 
-
-    call synchronize_all()
+    !call synchronize_all()
     if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS .and. &
           INSTASEIS_INPUT_DUMP == INSTASEIS_INPUT_DUMP_TRUE) then
+
+      nbrec = sum(nb_gll_per_proc)
+      ! dimensions for hdf5
+      coords_dimsf(1) = 3
+      coords_dimsf(2) = nbrec
+      params_dimsf(1) = nbrec
+      coords_dimsm(1) = 3
+      coords_dimsm(2) = nb_gll_per_proc(myrank+1)
+      params_dimsm(1) = nb_gll_per_proc(myrank+1)
+      nbrec_dims = (/1/)
+      spec_dims = (/sizeprocs/)
+      coords_countf = (/3, nb_gll_per_proc(myrank+1)/)
+      params_countf = (/nb_gll_per_proc(myrank+1)/)
+      coords_offsetf = (/0, offset_per_proc(myrank+1)/)
+      params_offsetf = (/offset_per_proc(myrank+1)/)
+
+      if (myrank == 0) then
+        open(10,file='./Inputs_Instaseis_Coupling/coupling.par')
+        read(10,'(a)') line
+        read(10,'(a)') hdf5_file        !! meshfem3D bd points (cartesian)
+        read(10,'(a)') line
+        read(10,'(a)') spec_file      !! path of hdf5 file (not used here)
+        close(10)
+      endif !! myrank == 0
+
+      call bcast_all_ch_array(hdf5_file,1,500)
+      call bcast_all_ch_array(spec_file,1,500)
+
       !! MPC write a hdf5 file for Instaseis input
       ! Initialize hdf5 interface
       call h5open_f(error)
@@ -916,7 +931,7 @@
       call h5pset_fapl_mpio(plist_id)
 
       ! Open the file collectively.
-      call h5fopen_f(hdf5_file, H5F_ACC_RDWR_F, file_id, error, &
+      call h5fopen_f(trim(hdf5_file), H5F_ACC_RDWR_F, file_id, error, &
                     access_prp = plist_id)
       call h5pclose_f(plist_id, error)
 
@@ -1023,40 +1038,40 @@
       call h5fclose_f(file_id, error)
 
       ntime = NSTEP
+      if (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER) then
+        !! MPC Create a file that is later going to be filled out by specfem
+        call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
+        call h5pset_fapl_mpio(plist_id)
+        ! Create the file collectively.
+        call h5fcreate_f(trim(spec_file), H5F_ACC_TRUNC_F, spec_file_id, error, &
+                         access_prp = plist_id)
 
-      !! MPC Create a file that is later going to be filled out by specfem
-      call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
-      call h5pset_fapl_mpio(plist_id)
-      ! Create the file collectively.
-      call h5fcreate_f(spec_file, H5F_ACC_TRUNC_F, spec_file_id, error, &
-                       access_prp = plist_id)
+        call h5pclose_f(plist_id, error)
+        ! Create new group
+        call h5gcreate_f(spec_file_id, grp_coords, spec_grp_id, error)
 
-      call h5pclose_f(plist_id, error)
-      ! Create new group
-      call h5gcreate_f(spec_file_id, grp_coords, spec_grp_id, error)
+        d_dimsf(1) = 3
+        d_dimsf(2) = ntime
+        d_dimsf(3) = nbrec
+        s_dimsf(1) = 6
+        s_dimsf(2) = ntime
+        s_dimsf(3) = nbrec
 
-      d_dimsf(1) = 3
-      d_dimsf(2) = ntime
-      d_dimsf(3) = nbrec
-      s_dimsf(1) = 6
-      s_dimsf(2) = ntime
-      s_dimsf(3) = nbrec
+        ! Create data spaces for the datasets, the dims are the entire arrays
+        call h5screate_simple_f(v_rank, d_dimsf, dspace_spec_d_id, error)
+        call h5screate_simple_f(s_rank, s_dimsf, dspace_spec_s_id, error)
+        ! Create datasets with default properties.
+        call h5dcreate_f(spec_grp_id, dset_spec_d, H5T_NATIVE_REAL, &
+                         dspace_spec_d_id, dset_spec_d_id, error)
+        call h5dcreate_f(spec_grp_id, dset_spec_s, H5T_NATIVE_REAL, &
+                         dspace_spec_s_id, dset_spec_s_id, error)
 
-      ! Create data spaces for the datasets, the dims are the entire arrays
-      call h5screate_simple_f(v_rank, d_dimsf, dspace_spec_d_id, error)
-      call h5screate_simple_f(s_rank, s_dimsf, dspace_spec_s_id, error)
-      ! Create datasets with default properties.
-      call h5dcreate_f(spec_grp_id, dset_spec_d, H5T_NATIVE_REAL, &
-                       dspace_spec_d_id, dset_spec_d_id, error)
-      call h5dcreate_f(spec_grp_id, dset_spec_s, H5T_NATIVE_REAL, &
-                       dspace_spec_s_id, dset_spec_s_id, error)
-
-      call h5dclose_f(dset_spec_d_id, error)
-      call h5dclose_f(dset_spec_s_id, error)
-      call h5gclose_f(spec_grp_id, error)
-      ! Close the file.
-      call h5fclose_f(spec_file_id, error)
-
+        call h5dclose_f(dset_spec_d_id, error)
+        call h5dclose_f(dset_spec_s_id, error)
+        call h5gclose_f(spec_grp_id, error)
+        ! Close the file.
+        call h5fclose_f(spec_file_id, error)
+      endif
       ! Close hdf5 interface
       call h5close_f(error)
     endif ! (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)

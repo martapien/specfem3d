@@ -128,8 +128,8 @@
 
   !! MPC for Instaseis-Specfem HDF5 dumps
   ! Names (file and HDF5 objects)
-  character(len=17), parameter :: hdf5_file_write = "specfem_dump.hdf5"
-  character(len=20), parameter :: hdf5_file_read = "gll_coordinates.hdf5"
+  character(len=500) hdf5_file_write
+  character(len=500) hdf5_file_read
   character(len=5), parameter :: grp_local = "local"
   character(len=18), parameter :: dset_d = "local/displacement"
   character(len=18), parameter :: dset_s = "local/strain"
@@ -178,6 +178,7 @@
 
   ! And some helpers
   integer :: ipoint, nbrec
+  character(len=100) line
 
 
   !! CD modif. : begin (implemented by VM) !! For coupling with DSM
@@ -263,6 +264,17 @@
   if (COUPLE_WITH_INJECTION_TECHNIQUE .and. &
      (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS) .and. &
      (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER)) then
+     if (myrank == 0) then
+       open(10,file='./Inputs_Instaseis_Coupling/coupling.par')
+       read(10,'(a)') line
+       read(10,'(a)') hdf5_file_read        !! meshfem3D bd points (cartesian)
+       read(10,'(a)') line
+       read(10,'(a)') hdf5_file_write     !! path of hdf5 file (not used here)
+       close(10)
+     endif !! myrank == 0
+
+     call bcast_all_ch_array(hdf5_file_read,1,500)
+     call bcast_all_ch_array(hdf5_file_write,1,500)
 
     !! MPC read off gll_coordinates hdf5 file the offsets & nbpoints per proc
     allocate(nrec_by_proc(sizeprocs))
@@ -279,11 +291,11 @@
     call h5pset_fapl_mpio(plist_id)
 
     if (it == 1) then
-      call h5fopen_f(hdf5_file_read, &
+      call h5fopen_f(trim(hdf5_file_read), &
                      H5F_ACC_RDWR_F, read_file_id, error, &
                      access_prp = plist_id)
     else
-      call h5fopen_f(hdf5_file_read, &
+      call h5fopen_f(trim(hdf5_file_read), &
                      H5F_ACC_RDONLY_F, read_file_id, error, &
                      access_prp = plist_id)
     endif
@@ -538,7 +550,7 @@
     call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
     call h5pset_fapl_mpio(plist_id)
     ! Create the file collectively.
-    call h5fopen_f(hdf5_file_write, H5F_ACC_RDWR_F, write_file_id, error, &
+    call h5fopen_f(trim(hdf5_file_write), H5F_ACC_RDWR_F, write_file_id, error, &
                    access_prp = plist_id)
     call h5pclose_f(plist_id, error)
     ! Open existing datasets

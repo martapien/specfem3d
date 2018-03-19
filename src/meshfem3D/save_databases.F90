@@ -514,7 +514,7 @@
 
     !! MPC hdf5 interface
 
-    character(len=21), parameter :: hdf5_file = "gll_coordinates.hdf5" ! File name
+    character(len=500) :: hdf5_file  ! File name
     character(len=5),  parameter :: grp_local = "local"
     character(len=22), parameter :: attr_rotmat = "rotmat_xyz_loc_to_glob"
     integer(hid_t) :: file_id           ! File identifier
@@ -714,6 +714,16 @@
 
        if (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS .and. &
             INSTASEIS_INPUT_DUMP == INSTASEIS_INPUT_DUMP_TRUE) then
+
+         if (myrank == 0) then
+           open(10,file='./Inputs_Instaseis_Coupling/coupling.par')
+           read(10,'(a)') line
+           read(10,'(a)') hdf5_file        !! meshfem3D bd points (cartesian)
+           close(10)
+         endif !! myrank == 0
+
+         call bcast_all_ch_array(hdf5_file,1,500)
+
          !! MPC save rotation matrix to a file
          !! MPC remember that everytihng gets transposed when dumped to hdf5!
          allocate(rotmat_transpose(3, 3))
@@ -724,7 +734,7 @@
          ! Initialize hdf5 interface
          call h5open_f(error)
          ! Create the file collectively.
-         call h5fcreate_f(hdf5_file, H5F_ACC_TRUNC_F, file_id, error)
+         call h5fcreate_f(trim(hdf5_file), H5F_ACC_TRUNC_F, file_id, error)
          ! Create new groups
          call h5gcreate_f(file_id, grp_local, grp_local_id, error)
          call h5screate_simple_f(rotmat_rank, rotmat_dims, aspace_rotmat_id, error)

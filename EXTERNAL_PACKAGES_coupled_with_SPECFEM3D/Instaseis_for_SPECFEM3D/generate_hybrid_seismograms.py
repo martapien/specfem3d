@@ -21,17 +21,15 @@ WORK_DIR = os.getcwd()
 path_to_coupling_pars = path_to_par + '/coupling.par'
 # read from coupling.par
 f_cpl = open(path_to_coupling_pars, 'r')
-lines = f_cpl.readlines()
+lines_cpl = f_cpl.read().splitlines()
 f_cpl.close()
-lines_cpl = list(filter(None, (line.split('#')[0].strip() for line in lines)))
+#lines_cpl = list(filter(None, (line.split('#')[0].strip() for line in lines)))
 
-bwd_db_path = lines_cpl[11]
-#bwd_db = instaseis.open_db(bwd_db_path)
-dt = float(lines_cpl[15])
-
-fieldsfile = os.path.join(WORK_DIR, lines_cpl[9])
-coordsfile = os.path.join(WORK_DIR, lines_cpl[0])
-writefolder = os.path.join(WORK_DIR, lines_cpl[12])
+bwd_db_path = lines_cpl[17].rstrip()
+dt = float(lines_cpl[25])
+fieldsfile = os.path.join(WORK_DIR, lines_cpl[3].rstrip())
+coordsfile = os.path.join(WORK_DIR, lines_cpl[1].rstrip())
+writefolder = os.path.join(WORK_DIR, lines_cpl[19].rstrip())
 
 if rank == 0:
     if not os.path.exists(writefolder):
@@ -41,7 +39,7 @@ if rank == 0:
 # ------ read receivers --------
 path_to_receiver_pars = path_to_par + '/receivers.par'
 f_rec = open(path_to_receiver_pars, 'r')
-receivers_input = f_rec.readlines()
+receivers_input = f_rec.read().splitlines()
 
 for i in np.arange(len(receivers_input)):
     lat, lon = receivers_input[i].split()
