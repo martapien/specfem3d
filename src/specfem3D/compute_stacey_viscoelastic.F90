@@ -51,7 +51,7 @@
 
   use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, &
                   INJECTION_TECHNIQUE_TYPE, INSTASEIS_INJECTION_BOX_LOCATION, &
-                  RECIPROCITY_AND_KH_INTEGRAL
+                  RECIPROCITY_AND_KH_INTEGRAL, DT
 
 ! *********************************************************************************
 ! added by Ping Tong (TP / Tong Ping) for the FK3D calculation
@@ -144,6 +144,7 @@
   integer(hid_t) :: read_file_id     ! File identifier
   integer(hid_t) :: plist_id          ! Property list identifier
   integer(hid_t) :: read_grp_id      ! Group identifier
+  integer(hid_t) :: write_grp_id      ! Group identifier
   integer(hid_t) :: dset_d_id         ! Dataset identifier
   integer(hid_t) :: dset_s_id         ! Dataset identifier
   integer(hid_t) :: dspace_d_id       ! Dataspace identifier
@@ -172,6 +173,12 @@
   integer(hsize_t), dimension(1) :: gll_offsetf  ! Hyperslab offset in f
   integer(hsize_t), dimension(1) :: attr_nbrec_by_proc_dim   ! Attribute
                                                              ! dimensions
+  integer :: dt_rank = 1                        ! Attribure rank
+  integer(hsize_t), dimension(1) :: dt_dims = 1 ! Attribute dimension
+  integer(hid_t) :: aspace_dt_id    ! Memspace identifier
+  character(len=17), parameter :: attr_dt = "dt"
+  integer(hid_t) :: attr_dt_id    ! Attribite identifier
+
   ! Data and attribute buffers
   real, allocatable :: displ_buf(:, :), strain_buf(:, :), weights_buf(:)
   integer, allocatable :: nrec_by_proc(:), offset_by_proc(:)
@@ -269,7 +276,7 @@
        read(10,'(a)') line
        read(10,'(a)') hdf5_file_read        !! meshfem3D bd points (cartesian)
        read(10,'(a)') line
-       read(10,'(a)') hdf5_file_write     !! path of hdf5 file (not used here)
+       read(10,'(a)') hdf5_file_write
        close(10)
      endif !! myrank == 0
 
@@ -538,21 +545,30 @@
     call h5fclose_f(read_file_id, error)
     call h5close_f(error)
 
-
-    !if (myrank == 0) then
-    !  write(*, *) "Dumping fields to hdf5 file, time step: ", it
-    !endif
-
     !! MPC dump displacement and strain in hdf5
     ! Initialize hdf5 interface
     call h5open_f(error)
     ! Setup file access property list with parallel I/O access.
     call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
     call h5pset_fapl_mpio(plist_id)
-    ! Create the file collectively.
+    ! Open the file collectively.
     call h5fopen_f(trim(hdf5_file_write), H5F_ACC_RDWR_F, write_file_id, error, &
                    access_prp = plist_id)
     call h5pclose_f(plist_id, error)
+
+    if (it == 1) then
+      call h5gopen_f(write_file_id, grp_local, write_grp_id, error)
+      call h5screate_simple_f(dt_rank, dt_dims, aspace_dt_id, error)
+      call h5acreate_f(write_grp_id, attr_dt, H5T_NATIVE_DOUBLE, &
+                    aspace_dt_id, attr_dt_id, error)
+      call h5awrite_f(attr_dt_id, H5T_NATIVE_DOUBLE, DT, &
+                      dt_dims, error)
+      call h5sclose_f(aspace_dt_id, error)
+      call h5aclose_f(attr_dt_id, error)
+      call h5gclose_f(write_grp_id, error)
+
+    endif ! if it==1
+
     ! Open existing datasets
     call h5dopen_f(write_file_id, dset_d, dset_d_id, error)
     call h5dopen_f(write_file_id, dset_s, dset_s_id, error)
