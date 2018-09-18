@@ -612,6 +612,20 @@
       write(*,*)
     endif
 
+    call read_value_logical(ADD_GAUSSIAN_PERT_RELATIVE, 'ADD_GAUSSIAN_PERT_RELATIVE', ier)
+    if (ier /= 0) then
+      some_parameters_missing_from_Par_file = .true.
+      write(*,'(a)') 'ADD_GAUSSIAN_PERT_RELATIVE = .false.'
+      write(*,*)
+    endif
+
+    call read_value_logical(ADD_BUBBLE_PERT_RELATIVE, 'ADD_BUBBLE_PERT_RELATIVE', ier)
+    if (ier /= 0) then
+      some_parameters_missing_from_Par_file = .true.
+      write(*,'(a)') 'ADD_BUBBLE_PERT_RELATIVE = .false.'
+      write(*,*)
+    endif
+
     call read_value_integer(INJECTION_TECHNIQUE_TYPE,'INJECTION_TECHNIQUE_TYPE',ier)
     if (ier /= 0) then
       some_parameters_missing_from_Par_file = .true.
@@ -1015,6 +1029,8 @@
 
     call bcast_all_singlei(NSOURCES)
     call bcast_all_singlel(ADD_GAUSSIAN_PERT_ABSOLUTE)
+    call bcast_all_singlel(ADD_GAUSSIAN_PERT_RELATIVE)
+    call bcast_all_singlel(ADD_BUBBLE_PERT_RELATIVE)
     call bcast_all_singlel(COUPLE_WITH_INJECTION_TECHNIQUE)
     call bcast_all_singlel(MESH_A_CHUNK_OF_THE_EARTH)
     call bcast_all_singlei(INJECTION_TECHNIQUE_TYPE)

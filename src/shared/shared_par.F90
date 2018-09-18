@@ -164,6 +164,8 @@ end module constants
   character(len=MAX_STRING_LEN) :: FKMODEL_FILE
   logical :: MESH_A_CHUNK_OF_THE_EARTH
   logical :: ADD_GAUSSIAN_PERT_ABSOLUTE
+  logical :: ADD_GAUSSIAN_PERT_RELATIVE
+  logical :: ADD_BUBBLE_PERT_RELATIVE
   logical :: RECIPROCITY_AND_KH_INTEGRAL
 
   end module shared_input_parameters

@@ -52,12 +52,12 @@
   integer :: ilayer,nlayer,ncoeff,ndeg_poly
   double precision :: ZREF,OLON,OLAT
 
-  !! gaussain perturbation definition
+  !! MPC gaussain and bubble perturbation definitions
   double precision :: sx, sy, sz
   double precision :: Ampl_pert_vp_read, Ampl_pert_vs_read, Ampl_pert_rho_read
   double precision :: Ampl_pert_vp, Ampl_pert_vs, Ampl_pert_rho
   double precision :: x_center_gauss, y_center_gauss, z_center_gauss
-
+  double precision :: bubble_radius, HWHM
 
   end module model_coupled_par
 
@@ -102,7 +102,8 @@
   subroutine read_model_for_coupling_or_chunk()
 
   use model_coupled_par !! VM VM custom subroutine for coupling with DSM
-  use shared_parameters, only:  ANISOTROPY, ATTENUATION, ADD_GAUSSIAN_PERT_ABSOLUTE
+  use shared_parameters, only:  ANISOTROPY, ATTENUATION, ADD_GAUSSIAN_PERT_ABSOLUTE, &
+      ADD_GAUSSIAN_PERT_RELATIVE, ADD_BUBBLE_PERT_RELATIVE
 
   implicit none
 
@@ -196,7 +197,7 @@
 
   if (ADD_GAUSSIAN_PERT_ABSOLUTE) then
     !! MPC reading gaussian pert parameters
-    open(27,file='MESH/ParFileGaussianPert',action='read')
+    open(27,file='MESH/ParFileGaussianPertAbsolute',action='read')
     read(27, '(a)') line
     read(27, '(a)') line
     read(27, *)     x_center_gauss, y_center_gauss, z_center_gauss
@@ -213,6 +214,51 @@
     Ampl_pert_vp  = dble(Ampl_pert_vp_read)
     Ampl_pert_vs  = dble(Ampl_pert_vs_read)
     Ampl_pert_rho = dble(Ampl_pert_rho_read)
+  endif
+
+  if (ADD_GAUSSIAN_PERT_RELATIVE) then
+    !! MPC reading gaussian pert parameters
+    open(27,file='MESH/ParFileGaussianPertRelative',action='read')
+    read(27, '(a)') line
+    read(27, '(a)') line
+    read(27, *)     x_center_gauss, y_center_gauss, z_center_gauss
+    read(27, '(a)') line
+    read(27, *)     sx, sy, sz
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_vp_read
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_vs_read
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_rho_read
+    close(27)
+
+    Ampl_pert_vp  = dble(Ampl_pert_vp_read)  / 100.d0
+    Ampl_pert_vs  = dble(Ampl_pert_vs_read)  / 100.d0
+    Ampl_pert_rho = dble(Ampl_pert_rho_read) / 100.d0
+  endif
+
+
+  if (ADD_BUBBLE_PERT_RELATIVE) then
+    !! MPC reading gaussian pert parameters
+    open(27,file='MESH/ParFileBubblePertRelative',action='read')
+    read(27, '(a)') line
+    read(27, '(a)') line
+    read(27, *)     x_center_gauss, y_center_gauss, z_center_gauss
+    read(27, '(a)') line
+    read(27, *)     HWHM
+    read(27, '(a)') line
+    read(27, *)     bubble_radius
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_vp_read
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_vs_read
+    read(27, '(a)') line
+    read(27, *)     Ampl_pert_rho_read
+    close(27)
+
+    Ampl_pert_vp  = dble(Ampl_pert_vp_read)  / 100.d0
+    Ampl_pert_vs  = dble(Ampl_pert_vs_read)  / 100.d0
+    Ampl_pert_rho = dble(Ampl_pert_rho_read) / 100.d0
   endif
 
   !! hardcoded gaussian pert (todo need to read an input file)
@@ -261,7 +307,8 @@
 
   use constants, only: CUSTOM_REAL
 
-  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, MESH_A_CHUNK_OF_THE_EARTH, ADD_GAUSSIAN_PERT_ABSOLUTE
+  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE, MESH_A_CHUNK_OF_THE_EARTH, &
+    ADD_GAUSSIAN_PERT_ABSOLUTE, ADD_GAUSSIAN_PERT_RELATIVE, ADD_BUBBLE_PERT_RELATIVE
 
   implicit none
 
@@ -290,7 +337,15 @@
 
 
   if (ADD_GAUSSIAN_PERT_ABSOLUTE) then
-      call add_gaussian_pert(x, y, z, rho, vp, vs)
+      call add_gaussian_pert_abs(x, y, z, rho, vp, vs)
+  endif
+
+  if (ADD_GAUSSIAN_PERT_RELATIVE) then
+      call add_gaussian_pert_rel(x, y, z, rho, vp, vs)
+  endif
+
+  if (ADD_BUBBLE_PERT_RELATIVE) then
+      call add_bubble_pert_rel(x, y, z, rho, vp, vs)
   endif
 
   end subroutine model_coupled_values
@@ -298,8 +353,8 @@
 !----------------------------------------------------------------
 
 
-  subroutine add_gaussian_pert(x, y, z, rho, vp, vs)
-
+  subroutine add_gaussian_pert_abs(x, y, z, rho, vp, vs)
+    ! MPC TODO might want to exit the loop if too far from center gauss
     use constants, only: CUSTOM_REAL
     use  model_coupled_par
 
@@ -315,8 +370,64 @@
     vs = vs + Ampl_pert_vs * gauss_value
     rho = rho +  Ampl_pert_rho * gauss_value
 
-  end subroutine add_gaussian_pert
+  end subroutine add_gaussian_pert_abs
 
+  !----------------------------------------------------------------
+
+
+    subroutine add_gaussian_pert_rel(x, y, z, rho, vp, vs)
+      ! MPC TODO might want to exit the loop if too far from center gauss
+
+      use constants, only: CUSTOM_REAL
+      use  model_coupled_par
+
+      double precision,       intent(in)    :: x, y, z
+      real(kind=CUSTOM_REAL), intent(inout) :: rho, vp, vs
+      double precision                      :: gauss_value
+
+      gauss_value = exp( -0.5d0 * (    ((x - x_center_gauss) / sx)**2 + &
+                                       ((y - y_center_gauss) / sy)**2 + &
+                                       ((z - z_center_gauss) / sz)**2) )
+
+      vp = vp + (vp * Ampl_pert_vp) * gauss_value
+      vs = vs + (vs * Ampl_pert_vs) * gauss_value
+      rho = rho + (rho * Ampl_pert_rho) * gauss_value
+
+    end subroutine add_gaussian_pert_rel
+
+
+    subroutine add_bubble_pert_rel(x, y, z, rho, vp, vs)
+
+      use constants, only: CUSTOM_REAL
+      use  model_coupled_par
+
+      double precision,       intent(in)    :: x, y, z
+      real(kind=CUSTOM_REAL), intent(inout) :: rho, vp, vs
+      double precision                      :: stddev
+      double precision                      :: distance
+      double precision                      :: gauss_value
+
+      stddev = HWHM / sqrt(2. * log(2.))
+
+      distance = sqrt((x - x_center_gauss) ** 2 + &
+                      (y - y_center_gauss) ** 2 + &
+                      (z - z_center_gauss) ** 2) - bubble_radius
+
+      if (distance < 0.) then
+        distance = 0.
+      endif
+
+      if (distance > 4. * HWHM) then
+        return
+      endif
+
+      gauss_value = exp( -0.5d0 * ((distance/stddev) ** 2))
+
+      vp = vp + (vp * Ampl_pert_vp) * gauss_value
+      vs = vs + (vs * Ampl_pert_vs) * gauss_value
+      rho = rho + (rho * Ampl_pert_rho) * gauss_value
+
+    end subroutine add_bubble_pert_rel
 !----------------------------------------------------------------
 
   subroutine model_1D_coupling(x_eval,y_eval,z_eval,rho_final,vp_final,vs_final,r1)
