@@ -36,3 +36,7 @@ doc/USER_MANUAL/Schedule
 .*swp
 .*swo
 *~
+
+# scotch
+src/decompose_mesh/scotch_*/*
+external_libs/scotch_5.1.12b/src/libscotch/y.output
