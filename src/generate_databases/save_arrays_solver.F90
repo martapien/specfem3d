@@ -745,7 +745,7 @@
   ! local parameters
   integer :: ier,i,j,k
   integer :: iface, ispec, iglob, igll
-  real(kind=CUSTOM_REAL) :: nx,ny,nz
+  !real(kind=CUSTOM_REAL) :: nx,ny,nz
   character(len=MAX_STRING_LEN) :: filename
 
   !! MPC HDF5 declarations for Instaseis-Specfem HDF5 dumps
@@ -1083,6 +1083,7 @@
 
       ntime = NSTEP
 
+  if (INSTASEIS_INJECTION_BOX_LOCATION /= INSTASEIS_INJECTION_BOX_LOCATION_RECEIVER) then
       !! MPC Create a file that is later going to be filled out by specfem
       ! MPC review this whole schema
       call h5pcreate_f(H5P_FILE_ACCESS_F, plist_id, error)
@@ -1116,7 +1117,7 @@
       call h5gclose_f(spec_grp_id, error)
       ! Close the file.
       call h5fclose_f(spec_file_id, error)
-
+  endif
       ! Close hdf5 interface
       call h5close_f(error)
     endif ! (INJECTION_TECHNIQUE_TYPE == INJECTION_TECHNIQUE_IS_INSTASEIS)

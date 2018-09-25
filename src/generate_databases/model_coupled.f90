@@ -110,8 +110,8 @@
  double precision   :: radius_of_box_top
  logical            :: buried_box
  integer            :: nel_lat, nel_lon, nel_depth
-  integer :: i,cc,ier
-  double precision :: aa,bb
+  integer :: i, ier !, cc
+  !double precision :: aa,bb
 
   ! user output
   if (myrank == 0) then
