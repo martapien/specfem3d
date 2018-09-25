@@ -40,11 +40,11 @@
   implicit none
 
   ! local parameters
-  double precision :: tCPU
+  double precision :: tCPU,tstart
   double precision, external :: wtime
 
   ! get MPI starting time
-  time_start = wtime()
+  tstart = wtime()
 
   ! user output infos
   call prepare_timerun_user_output()
@@ -91,13 +91,18 @@
   call prepare_timerun_OpenMP()
 #endif
 
+  ! prepars coupling with injection boundary
+  call couple_with_injection_prepare_boundary()
+
   ! elapsed time since beginning of preparation
   if (myrank == 0) then
-    tCPU = wtime() - time_start
+    tCPU = wtime() - tstart
     write(IMAIN,*)
     write(IMAIN,*) 'Elapsed time for preparing timerun in seconds = ',tCPU
     write(IMAIN,*)
-    write(IMAIN,*) 'time loop:'
+    write(IMAIN,*) '************'
+    write(IMAIN,*) ' time loop'
+    write(IMAIN,*) '************'
     if (USE_LDDRK) then
       write(IMAIN,*) '              scheme:         LDDRK with',NSTAGE_TIME_SCHEME,'stages'
     else
@@ -154,66 +159,62 @@
 
   ! user info
   if (myrank == 0) then
-
     write(IMAIN,*)
+    write(IMAIN,*) 'Simulation setup:'
+    write(IMAIN,*)
+
+    if (ACOUSTIC_SIMULATION) then
+      write(IMAIN,*) 'incorporating acoustic simulation'
+    else
+      write(IMAIN,*) '  no acoustic simulation'
+    endif
+
+    if (ELASTIC_SIMULATION) then
+      write(IMAIN,*) 'incorporating elastic simulation'
+    else
+      write(IMAIN,*) '  no elastic simulation'
+    endif
+
+    if (POROELASTIC_SIMULATION) then
+      write(IMAIN,*) 'incorporating poroelastic simulation'
+    else
+      write(IMAIN,*) '  no poroelastic simulation'
+    endif
+    write(IMAIN,*)
+
     if (ATTENUATION) then
       write(IMAIN,*) 'incorporating attenuation using ',N_SLS,' standard linear solids'
       if (USE_OLSEN_ATTENUATION) then
         write(IMAIN,*) 'using attenuation from Olsen et al.'
       else
-        write(IMAIN,*) 'not using attenuation from Olsen et al.'
+        write(IMAIN,*) '  not using attenuation from Olsen et al.'
       endif
     else
-      write(IMAIN,*) 'no attenuation'
+      write(IMAIN,*) '  no attenuation'
     endif
 
-    write(IMAIN,*)
     if (ANISOTROPY) then
       write(IMAIN,*) 'incorporating anisotropy'
     else
-      write(IMAIN,*) 'no anisotropy'
+      write(IMAIN,*) '  no anisotropy'
     endif
 
-    write(IMAIN,*)
     if (APPROXIMATE_OCEAN_LOAD) then
       write(IMAIN,*) 'incorporating the oceans using equivalent load'
     else
-      write(IMAIN,*) 'no oceans'
+      write(IMAIN,*) '  no oceans'
     endif
 
-    write(IMAIN,*)
     if (GRAVITY) then
       write(IMAIN,*) 'incorporating gravity'
     else
-      write(IMAIN,*) 'no gravity'
+      write(IMAIN,*) '  no gravity'
     endif
 
-    write(IMAIN,*)
-    if (ACOUSTIC_SIMULATION) then
-      write(IMAIN,*) 'incorporating acoustic simulation'
-    else
-      write(IMAIN,*) 'no acoustic simulation'
-    endif
-
-    write(IMAIN,*)
-    if (ELASTIC_SIMULATION) then
-      write(IMAIN,*) 'incorporating elastic simulation'
-    else
-      write(IMAIN,*) 'no elastic simulation'
-    endif
-
-    write(IMAIN,*)
-    if (POROELASTIC_SIMULATION) then
-      write(IMAIN,*) 'incorporating poroelastic simulation'
-    else
-      write(IMAIN,*) 'no poroelastic simulation'
-    endif
-
-    write(IMAIN,*)
     if (MOVIE_SIMULATION) then
       write(IMAIN,*) 'incorporating movie simulation'
     else
-      write(IMAIN,*) 'no movie simulation'
+      write(IMAIN,*) '  no movie simulation'
     endif
 
     write(IMAIN,*)
@@ -355,9 +356,6 @@
 
   implicit none
 
-  ! local parameters
-  integer :: ier
-
   ! time scheme
   if (.not. USE_LDDRK) then
     ! Newmark time scheme, only single update needed
@@ -379,25 +377,6 @@
     b_deltat = - real(DT,kind=CUSTOM_REAL)
     b_deltatover2 = b_deltat/2._CUSTOM_REAL
     b_deltatsqover2 = b_deltat*b_deltat/2._CUSTOM_REAL
-  endif
-
-  ! seismograms
-  if (nrec_local > 0) then
-    ! allocate seismogram array
-    allocate(seismograms_d(NDIM,nrec_local,NSTEP),stat=ier)
-    if (ier /= 0) stop 'error allocating array seismograms_d'
-    allocate(seismograms_v(NDIM,nrec_local,NSTEP),stat=ier)
-    if (ier /= 0) stop 'error allocating array seismograms_v'
-    allocate(seismograms_a(NDIM,nrec_local,NSTEP),stat=ier)
-    if (ier /= 0) stop 'error allocating array seismograms_a'
-    allocate(seismograms_p(NDIM,nrec_local,NSTEP),stat=ier)
-    if (ier /= 0) stop 'error allocating array seismograms_p'
-
-    ! initialize seismograms
-    seismograms_d(:,:,:) = 0._CUSTOM_REAL
-    seismograms_v(:,:,:) = 0._CUSTOM_REAL
-    seismograms_a(:,:,:) = 0._CUSTOM_REAL
-    seismograms_p(:,:,:) = 0._CUSTOM_REAL
   endif
 
   end subroutine prepare_timerun_constants
@@ -429,9 +408,12 @@
 
   if (ACOUSTIC_SIMULATION) then
     allocate(potential_acoustic_lddrk(NGLOB_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2120')
     if (ier /= 0) stop 'Error allocating array potential_acoustic_lddrk'
     allocate(potential_dot_acoustic_lddrk(NGLOB_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2121')
     if (ier /= 0) stop 'Error allocating array potential_dot_acoustic_lddrk'
+
     potential_acoustic_lddrk(:) = 0._CUSTOM_REAL
     potential_dot_acoustic_lddrk(:) = 0._CUSTOM_REAL
     if (FIX_UNDERFLOW_PROBLEM) then
@@ -442,9 +424,12 @@
 
   if (ELASTIC_SIMULATION) then
     allocate(displ_lddrk(NDIM,NGLOB_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2122')
     if (ier /= 0) stop 'Error allocating array displ_lddrk'
     allocate(veloc_lddrk(NDIM,NGLOB_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2123')
     if (ier /= 0) stop 'Error allocating array veloc_lddrk'
+
     displ_lddrk(:,:) = 0._CUSTOM_REAL
     veloc_lddrk(:,:) = 0._CUSTOM_REAL
     if (FIX_UNDERFLOW_PROBLEM) then
@@ -453,25 +438,37 @@
     endif
 
     ! note: currently, they need to be defined, as they are used in some subroutine arguments
-    allocate(R_xx_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS), &
-             R_yy_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS), &
-             R_xy_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS), &
-             R_xz_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS), &
-             R_yz_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS),stat=ier)
+    allocate(R_xx_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2124')
+    allocate(R_yy_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2125')
+    allocate(R_xy_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2126')
+    allocate(R_xz_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2127')
+    allocate(R_yz_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2128')
     if (ier /= 0) stop 'Error allocating array R_**_lddrk etc.'
 
-    allocate(R_trace_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK,N_SLS))
+    allocate(R_trace_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2129')
     if (ier /= 0) stop 'Error allocating array R_trace_lddrk etc.'
 
     if (SIMULATION_TYPE == 3) then
-      allocate(b_R_xx_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS), &
-               b_R_yy_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS), &
-               b_R_xy_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS), &
-               b_R_xz_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS), &
-               b_R_yz_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK ,N_SLS),stat=ier)
+      allocate(b_R_xx_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2130')
+      allocate(b_R_yy_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2131')
+      allocate(b_R_xy_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2132')
+      allocate(b_R_xz_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2133')
+      allocate(b_R_yz_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2134')
       if (ier /= 0) stop 'Error allocating array R_**_lddrk etc.'
 
-      allocate(b_R_trace_lddrk(NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK,N_SLS))
+      allocate(b_R_trace_lddrk(N_SLS,NGLLX,NGLLY,NGLLZ,NSPEC_ATTENUATION_AB_LDDRK),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2135')
       if (ier /= 0) stop 'Error allocating array R_**_lddrk etc.'
     endif
 
@@ -627,13 +624,23 @@
   integer :: ier
   integer(kind=8) :: filesize
 
-  ! seismograms
+  ! moment tensor derivatives
   if (nrec_local > 0 .and. SIMULATION_TYPE == 2) then
     ! allocate Frechet derivatives array
-    allocate(Mxx_der(nrec_local),Myy_der(nrec_local), &
-             Mzz_der(nrec_local),Mxy_der(nrec_local), &
-             Mxz_der(nrec_local),Myz_der(nrec_local), &
-             sloc_der(NDIM,nrec_local),stat=ier)
+    allocate(Mxx_der(nrec_local),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2136')
+    allocate(Myy_der(nrec_local),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2137')
+    allocate(Mzz_der(nrec_local),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2138')
+    allocate(Mxy_der(nrec_local),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2139')
+    allocate(Mxz_der(nrec_local),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2140')
+    allocate(Myz_der(nrec_local),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2141')
+    allocate(sloc_der(NDIM,nrec_local),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2142')
     if (ier /= 0) stop 'error allocating array Mxx_der and following arrays'
     Mxx_der = 0._CUSTOM_REAL
     Myy_der = 0._CUSTOM_REAL
@@ -642,10 +649,6 @@
     Mxz_der = 0._CUSTOM_REAL
     Myz_der = 0._CUSTOM_REAL
     sloc_der = 0._CUSTOM_REAL
-
-    allocate(seismograms_eps(NDIM,NDIM,nrec_local,NSTEP),stat=ier)
-    if (ier /= 0) stop 'error allocating array seismograms_eps'
-    seismograms_eps(:,:,:,:) = 0._CUSTOM_REAL
   endif
 
   ! attenuation backward memories
@@ -766,6 +769,7 @@
       if (ELASTIC_SIMULATION) then
         ! allocates wavefield
         allocate(b_absorb_field(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 2143')
         if (ier /= 0) stop 'error allocating array b_absorb_field'
 
         ! size of single record
@@ -800,10 +804,12 @@
       if (ACOUSTIC_SIMULATION) then
         ! allocates wavefield
         allocate(b_absorb_potential(NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 2144')
         if (ier /= 0) stop 'error allocating array b_absorb_potential'
 
         ! size of single record
-        b_reclen_potential = CUSTOM_REAL * NGLLSQUARE * num_abs_boundary_faces
+        b_reclen_potential = CUSTOM_REAL * NGLLSQUARE * num_abs_boundary_faces * NB_RUNS_ACOUSTIC_GPU
+
 
         ! check integer size limit: size of b_reclen_potential must fit onto an 4-byte integer
         if (num_abs_boundary_faces > 2147483646 / (CUSTOM_REAL * NGLLSQUARE)) then
@@ -842,7 +848,9 @@
       if (POROELASTIC_SIMULATION) then
         ! allocates wavefields for solid and fluid phases
         allocate(b_absorb_fields(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 2145')
         allocate(b_absorb_fieldw(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 2146')
         if (ier /= 0) stop 'error allocating array b_absorb_fields and b_absorb_fieldw'
 
         ! size of single record
@@ -885,17 +893,21 @@
       b_num_abs_boundary_faces = 0
       if (ELASTIC_SIMULATION) then
         allocate(b_absorb_field(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 2147')
         if (ier /= 0) stop 'error allocating array b_absorb_field'
       endif
 
       if (ACOUSTIC_SIMULATION) then
         allocate(b_absorb_potential(NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 2148')
         if (ier /= 0) stop 'error allocating array b_absorb_potential'
       endif
 
       if (POROELASTIC_SIMULATION) then
         allocate(b_absorb_fields(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 2149')
         allocate(b_absorb_fieldw(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 2150')
         if (ier /= 0) stop 'error allocating array b_absorb_fields and b_absorb_fieldw'
       endif
     endif
@@ -904,17 +916,21 @@
     b_num_abs_boundary_faces = 0
     if (ELASTIC_SIMULATION) then
       allocate(b_absorb_field(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2151')
       if (ier /= 0) stop 'error allocating array b_absorb_field'
     endif
 
     if (ACOUSTIC_SIMULATION) then
       allocate(b_absorb_potential(NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2152')
       if (ier /= 0) stop 'error allocating array b_absorb_potential'
     endif
 
     if (POROELASTIC_SIMULATION) then
       allocate(b_absorb_fields(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2153')
       allocate(b_absorb_fieldw(NDIM,NGLLSQUARE,b_num_abs_boundary_faces),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2154')
       if (ier /= 0) stop 'error allocating array b_absorb_fields and b_absorb_fieldw'
     endif
   endif
@@ -1016,6 +1032,7 @@
       num_colors_outer_elastic = 1
       num_colors_inner_elastic = 1
       allocate(num_elem_colors_elastic(num_colors_outer_elastic + num_colors_inner_elastic),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2155')
       if (ier /= 0) stop 'error allocating num_elem_colors_elastic array'
 
       ! sets to all elements in inner/outer phase

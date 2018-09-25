@@ -40,12 +40,16 @@
 
 ! use dynamic allocation to allocate memory for arrays
   allocate(ibool(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 605')
   if (ier /= 0) stop 'error allocating array ibool'
   allocate(xstore(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 606')
   if (ier /= 0) stop 'error allocating array xstore'
   allocate(ystore(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 607')
   if (ier /= 0) stop 'error allocating array ystore'
   allocate(zstore(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 608')
   if (ier /= 0) call exit_MPI(myrank,'not enough memory to allocate arrays')
 
   call memory_eval_mesher(myrank,NSPEC_AB,npointot,nnodes_ext_mesh, &
@@ -61,7 +65,7 @@
 
 ! main working routine to create all the regions of the mesh
   if (myrank == 0) then
-    write(IMAIN,*) 'create regions: '
+    write(IMAIN,*) 'create regions:'
   endif
   call create_regions_mesh()
 
@@ -85,9 +89,17 @@
   call max_all_dp(max_elevation,max_elevation_all)
 
   if (myrank == 0) then
-    write(IMAIN,*)
-    write(IMAIN,*) 'min and max of topography included in mesh in m is ',min_elevation_all,' ',max_elevation_all
-    write(IMAIN,*)
+    if (min_elevation_all /= HUGEVAL .and. max_elevation_all /= -HUGEVAL) then
+      write(IMAIN,*)
+      write(IMAIN,*) 'min and max of elevation (i.e. height of the upper surface of the mesh) included in mesh in m is ', &
+                           min_elevation_all,' ',max_elevation_all
+      write(IMAIN,*)
+    else
+      write(IMAIN,*)
+      write(IMAIN,*) 'no upper surface of the mesh detected (no "topography" included in the mesh), there is something wrong'
+      call exit_MPI(myrank,'wrong or empty definition of upper surface of the mesh in file free_or_absorbing_surface_file_zmax')
+      write(IMAIN,*)
+    endif
     call flush_IMAIN()
   endif
 

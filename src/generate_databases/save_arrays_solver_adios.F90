@@ -55,7 +55,7 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
     STACEY_ABSORBING_CONDITIONS, &
     LOCAL_PATH, myrank, sizeprocs, &
     nspec_ab,NGLLX,NGLLY,NGLLZ,NDIM,NGLLSQUARE,USE_MESH_COLORING_GPU, &
-    ADIOS_TRANSPORT_METHOD
+    ADIOS_TRANSPORT_METHOD,nspec_irregular
 
   ! PML
   use generate_databases_par, only: PML_CONDITIONS, &
@@ -105,7 +105,7 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
   integer :: local_dim
 
   !--- Variables to allreduce - wmax stands for world_max
-  integer :: nglob_wmax, nspec_wmax, nspec_cpml_wmax, &
+  integer :: nglob_wmax, nspec_wmax, nspec_irreg_wmax, nspec_cpml_wmax, &
              CPML_width_x_wmax, CPML_width_y_wmax, CPML_width_z_wmax, &
              nglob_interface_PML_acoustic_wmax, &
              nglob_interface_PML_elastic_wmax, num_abs_boundary_faces_wmax, &
@@ -125,7 +125,7 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
              nglob_ocean_wmax, nglob_xy_wmax, nspec_ab_wmax, nspec_aniso_wmax, &
              max_nibool_interfaces_ext_mesh_wmax
 
-  integer, parameter :: num_vars = 40
+  integer, parameter :: num_vars = 41
   integer, dimension(num_vars) :: max_global_values
   integer :: comm
 
@@ -135,12 +135,11 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
   !MPI interfaces
   max_nibool_interfaces_ext_mesh = maxval(nibool_interfaces_ext_mesh(:))
 
-  allocate(ibool_interfaces_ext_mesh_dummy(max_nibool_interfaces_ext_mesh, &
-                                           num_interfaces_ext_mesh),stat=ier)
+  allocate(ibool_interfaces_ext_mesh_dummy(max_nibool_interfaces_ext_mesh,num_interfaces_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 837')
   if (ier /= 0) stop 'error allocating array'
   do i = 1, num_interfaces_ext_mesh
-     ibool_interfaces_ext_mesh_dummy(:,i) = &
-         ibool_interfaces_ext_mesh(1:max_nibool_interfaces_ext_mesh,i)
+     ibool_interfaces_ext_mesh_dummy(:,i) = ibool_interfaces_ext_mesh(1:max_nibool_interfaces_ext_mesh,i)
   enddo
 
   !-----------------------------------------------------------------.
@@ -188,7 +187,7 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
   max_global_values(38) = nglob_xy
   max_global_values(39) = nspec_ab
   max_global_values(40) = nspec_aniso
-
+  max_global_values(41) = nspec_irregular
   ! calling wrapper instead to compile without mpi
   call max_allreduce_i(max_global_values,num_vars)
 
@@ -232,6 +231,7 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
   nglob_xy_wmax                       = max_global_values(38)
   nspec_ab_wmax                       = max_global_values(39)
   nspec_aniso_wmax                    = max_global_values(40)
+  nspec_irreg_wmax                    = max_global_values(41)
 
   ! save arrays for the solver to run.
   !-----------------------------------.
@@ -247,6 +247,7 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
   !------------------------'
   call define_adios_scalar(group, groupsize, '', STRINGIFY_VAR(nspec))
   call define_adios_scalar(group, groupsize, '', STRINGIFY_VAR(nglob))
+  call define_adios_scalar(group, groupsize, '', STRINGIFY_VAR(nspec_irregular))
 
   local_dim = NGLLX * NGLLY * NGLLZ * nspec_wmax
   call define_adios_global_array1D(group, groupsize, local_dim, &
@@ -260,10 +261,14 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
   call define_adios_global_array1D(group, groupsize, local_dim, &
                                    '', "z_global", zstore_dummy)
 
-  ! this array is needed for acoustic simulations but also for elastic
-  ! simulations with CPML, thus we allocate it and read it in all cases
-  ! (whether the simulation is acoustic, elastic, or acoustic/elastic)
-  local_dim = NGLLX * NGLLY * NGLLZ * nspec_wmax
+  local_dim = nspec_irreg_wmax
+  call define_adios_global_array1D(group, groupsize, local_dim, &
+                                   '', STRINGIFY_VAR(irregular_element_number))
+
+  call define_adios_scalar(group, groupsize, '', STRINGIFY_VAR(xix_regular))
+  call define_adios_scalar(group, groupsize, '', STRINGIFY_VAR(jacobian_regular))
+
+  local_dim = NGLLX * NGLLY * NGLLZ * nspec_irreg_wmax
   call define_adios_global_array1D(group, groupsize, &
                                    local_dim, '', STRINGIFY_VAR(xixstore))
   call define_adios_global_array1D(group, groupsize, &
@@ -284,6 +289,8 @@ subroutine save_arrays_solver_ext_mesh_adios(nspec, nglob, &
                                    local_dim, '', STRINGIFY_VAR(gammazstore))
   call define_adios_global_array1D(group, groupsize, &
                                    local_dim, '', STRINGIFY_VAR(jacobianstore))
+
+  local_dim = NGLLX * NGLLY * NGLLZ * nspec_wmax
   call define_adios_global_array1D(group, groupsize, &
                                    local_dim, '', STRINGIFY_VAR(kappastore))
   call define_adios_global_array1D(group, groupsize, &
@@ -1422,9 +1429,15 @@ subroutine save_arrays_solver_files_adios(nspec,nglob,ibool, nspec_wmax, &
   !----------------------------------.
   ! Set up the model values to write |
   !----------------------------------'
-  allocate( vp_tmp(NGLLX,NGLLY,NGLLZ,nspec), stat=ier); if (ier /= 0) stop 'error allocating array '
-  allocate( vs_tmp(NGLLX,NGLLY,NGLLZ,nspec), stat=ier); if (ier /= 0) stop 'error allocating array '
-  allocate( rho_tmp(NGLLX,NGLLY,NGLLZ,nspec), stat=ier); if (ier /= 0) stop 'error allocating array '
+  allocate( vp_tmp(NGLLX,NGLLY,NGLLZ,nspec), stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 838')
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array')
+  allocate( vs_tmp(NGLLX,NGLLY,NGLLZ,nspec), stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 839')
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array')
+  allocate( rho_tmp(NGLLX,NGLLY,NGLLZ,nspec), stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 840')
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array')
   ! vp (for checking the mesh and model)
   !minimum = minval( abs(rho_vp) )
   !if (minimum(1) /= 0.0) then

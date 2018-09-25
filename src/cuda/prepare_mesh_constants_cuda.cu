@@ -108,10 +108,11 @@ extern "C"
 void FC_FUNC_(prepare_constants_device,
               PREPARE_CONSTANTS_DEVICE)(long* Mesh_pointer,
                                         int* h_NGLLX, int* NSPEC_AB, int* NGLOB_AB,
+                                        int* NSPEC_IRREGULAR,int* h_irregular_element_number,
                                         realw* h_xix, realw* h_xiy, realw* h_xiz,
                                         realw* h_etax, realw* h_etay, realw* h_etaz,
                                         realw* h_gammax, realw* h_gammay, realw* h_gammaz,
-                                        realw* h_kappav, realw* h_muv,
+                                        realw* xix_regular, realw* jacobian_regular,
                                         int* h_ibool,
                                         int* num_interfaces_ext_mesh, int* max_nibool_interfaces_ext_mesh,
                                         int* h_nibool_interfaces_ext_mesh, int* h_ibool_interfaces_ext_mesh,
@@ -134,7 +135,10 @@ void FC_FUNC_(prepare_constants_device,
                                         int* h_myrank,
                                         int* SAVE_FORWARD,
                                         realw* h_xir,realw* h_etar, realw* h_gammar,double * nu,
-                                        int* islice_selected_rec,int* NSTEP) {
+                                        int* islice_selected_rec,
+                                        int* NTSTEP_BETWEEN_OUTPUT_SEISMOS,
+                                        int* SAVE_SEISMOGRAMS_DISPLACEMENT,int* SAVE_SEISMOGRAMS_VELOCITY,
+                                        int* SAVE_SEISMOGRAMS_ACCELERATION,int* SAVE_SEISMOGRAMS_PRESSURE) {
 
   TRACE("prepare_constants_device");
 
@@ -186,9 +190,16 @@ void FC_FUNC_(prepare_constants_device,
   }
   #endif
 
+  copy_todevice_int((void**)&mp->d_irregular_element_number,h_irregular_element_number,mp->NSPEC_AB);
+  mp->xix_regular = *xix_regular;
+  mp->jacobian_regular = *jacobian_regular;
+
   // mesh
   // Assuming NGLLX=5. Padded is then 128 (5^3+3)
-  int size_padded = NGLL3_PADDED * (mp->NSPEC_AB);
+  int size_padded = NGLL3_PADDED * (*NSPEC_IRREGULAR > 0 ? *NSPEC_IRREGULAR : 1);
+
+// DK DK August 2018: adding this test, following a suggestion by Etienne Bachmann
+  if (*h_NGLLX != NGLLX) exit_on_error("make sure that the NGLL constants are equal in the two files setup/constants.h and src/cuda/mesh_constants_cuda.h and then please re-compile; also make sure that the value of NGLL3_PADDED is consistent with the value of NGLL\n");
 
   print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_xix, size_padded*sizeof(realw)),1001);
   print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_xiy, size_padded*sizeof(realw)),1002);
@@ -199,8 +210,6 @@ void FC_FUNC_(prepare_constants_device,
   print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_gammax, size_padded*sizeof(realw)),1007);
   print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_gammay, size_padded*sizeof(realw)),1008);
   print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_gammaz, size_padded*sizeof(realw)),1009);
-  print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_kappav, size_padded*sizeof(realw)),1010);
-  print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_muv, size_padded*sizeof(realw)),1011);
 
   // transfer constant element data with padding
   /*
@@ -230,40 +239,38 @@ void FC_FUNC_(prepare_constants_device,
                                        NGLL3*sizeof(realw),cudaMemcpyHostToDevice),1511);
   }
   */
-  // way 2: faster ...
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_xix, NGLL3_PADDED*sizeof(realw),
-                                       h_xix, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1501);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_xiy, NGLL3_PADDED*sizeof(realw),
-                                       h_xiy, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1502);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_xiz, NGLL3_PADDED*sizeof(realw),
-                                       h_xiz, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1503);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_etax, NGLL3_PADDED*sizeof(realw),
-                                       h_etax, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1504);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_etay, NGLL3_PADDED*sizeof(realw),
-                                       h_etay, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1505);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_etaz, NGLL3_PADDED*sizeof(realw),
-                                       h_etaz, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1506);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_gammax, NGLL3_PADDED*sizeof(realw),
-                                       h_gammax, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1507);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_gammay, NGLL3_PADDED*sizeof(realw),
-                                       h_gammay, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1508);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_gammaz, NGLL3_PADDED*sizeof(realw),
-                                       h_gammaz, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1509);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_kappav, NGLL3_PADDED*sizeof(realw),
-                                       h_kappav, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1510);
-  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_muv, NGLL3_PADDED*sizeof(realw),
-                                       h_muv, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
-                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1511);
+  // way 2: faster ....
+  if (*NSPEC_IRREGULAR > 0 ){
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_xix, NGLL3_PADDED*sizeof(realw),
+                                         h_xix, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1501);
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_xiy, NGLL3_PADDED*sizeof(realw),
+                                         h_xiy, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1502);
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_xiz, NGLL3_PADDED*sizeof(realw),
+                                         h_xiz, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1503);
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_etax, NGLL3_PADDED*sizeof(realw),
+                                         h_etax, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1504);
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_etay, NGLL3_PADDED*sizeof(realw),
+                                         h_etay, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1505);
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_etaz, NGLL3_PADDED*sizeof(realw),
+                                         h_etaz, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1506);
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_gammax, NGLL3_PADDED*sizeof(realw),
+                                         h_gammax, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1507);
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_gammay, NGLL3_PADDED*sizeof(realw),
+                                         h_gammay, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1508);
+    print_CUDA_error_if_any(cudaMemcpy2D(mp->d_gammaz, NGLL3_PADDED*sizeof(realw),
+                                         h_gammaz, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                         mp->NSPEC_AB, cudaMemcpyHostToDevice),1509);
+  }
+  size_padded = NGLL3_PADDED * (mp->NSPEC_AB);
+
 
   // global indexing (padded)
   print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_ibool, size_padded*sizeof(int)),1600);
@@ -312,14 +319,18 @@ void FC_FUNC_(prepare_constants_device,
     copy_todevice_realw((void**)&mp->d_sourcearrays,h_sourcearrays,(*NSOURCES)*NDIM*NGLL3);
 
     // buffer for source time function values
-    print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_stf_pre_compute,
-                                       *NSOURCES*sizeof(double)),1303);
+    print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_stf_pre_compute,(*NSOURCES)*sizeof(field)),1303);
   }
   copy_todevice_int((void**)&mp->d_islice_selected_source,h_islice_selected_source,(*NSOURCES));
   copy_todevice_int((void**)&mp->d_ispec_selected_source,h_ispec_selected_source,(*NSOURCES));
 
 
   // receiver stations
+  mp->save_seismograms_d = *SAVE_SEISMOGRAMS_DISPLACEMENT;
+  mp->save_seismograms_v = *SAVE_SEISMOGRAMS_VELOCITY;
+  mp->save_seismograms_a = *SAVE_SEISMOGRAMS_ACCELERATION;
+  mp->save_seismograms_p = *SAVE_SEISMOGRAMS_PRESSURE;
+
   mp->nrec_local = *nrec_local; // number of receiver located in this partition
   // note that:
   // size(ispec_selected_rec) = nrec
@@ -328,32 +339,43 @@ void FC_FUNC_(prepare_constants_device,
     copy_todevice_realw((void**)&mp->d_hetar,h_etar,NGLLY*mp->nrec_local);
     copy_todevice_realw((void**)&mp->d_hgammar,h_gammar,NGLLZ*mp->nrec_local);
 
-    float* h_nu;
-    h_nu=(float*)malloc(9 * sizeof(float) * mp->nrec_local);
-    int irec_loc=0;
-    for (int i=0;i < (*nrec);i++)
-      {
-      if ( mp->myrank == islice_selected_rec[i])
-        {
-         for (int j=0;j < 9;j++) h_nu[j + 9*irec_loc] = (float)nu[j + 9*i];
+    realw* h_nu;
+    h_nu = (realw*)malloc(NDIM * NDIM * mp->nrec_local * sizeof(realw));
+    int irec_loc = 0;
+    for (int i=0;i < (*nrec);i++){
+      if (mp->myrank == islice_selected_rec[i]){
+         for (int j = 0; j < 9; j++) h_nu[j + NDIM * NDIM * irec_loc] = (realw)nu[j + NDIM * NDIM * i];
          irec_loc = irec_loc + 1;
-        }
       }
-    copy_todevice_realw((void**)&mp->d_nu,h_nu,3*3*(*nrec_local));
+    }
+    copy_todevice_realw((void**)&mp->d_nu,h_nu,NDIM * NDIM * (*nrec_local));
     free(h_nu);
 
-    print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_seismograms_d,3*(*NSTEP)*(*nrec_local)*sizeof(realw)),8101);
-    print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_seismograms_v,3*(*NSTEP)*(*nrec_local)*sizeof(realw)),8101);
-    print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_seismograms_a,3*(*NSTEP)*(*nrec_local)*sizeof(realw)),8101);
-    print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_seismograms_p,3*(*NSTEP)*(*nrec_local)*sizeof(realw)),8101);
-    int * ispec_selected_rec_loc;
-    ispec_selected_rec_loc = (int*)malloc(sizeof(int)*mp->nrec_local);
-    irec_loc=0;
-    for(int i=0;i<*nrec;i++) { if ( mp->myrank == islice_selected_rec[i]){ ispec_selected_rec_loc[irec_loc] = h_ispec_selected_rec[i];irec_loc = irec_loc+1;}}
+    // seismograms
+    int size =  (*NTSTEP_BETWEEN_OUTPUT_SEISMOS) * (*nrec_local);
+
+    if (mp->save_seismograms_d)
+      print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_seismograms_d,NDIM*size * sizeof(realw)),1801);
+    if (mp->save_seismograms_v)
+      print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_seismograms_v,NDIM*size * sizeof(realw)),1802);
+    if (mp->save_seismograms_a)
+      print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_seismograms_a,NDIM*size * sizeof(realw)),1803);
+    if (mp->save_seismograms_p)
+      print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_seismograms_p,size * sizeof(field)),1804);
+
+    int *ispec_selected_rec_loc;
+    ispec_selected_rec_loc = (int*)malloc(mp->nrec_local * sizeof(int));
+    irec_loc = 0;
+    for(int i=0;i<*nrec;i++) {
+      if ( mp->myrank == islice_selected_rec[i]){
+        ispec_selected_rec_loc[irec_loc] = h_ispec_selected_rec[i];
+        irec_loc = irec_loc+1;
+      }
+    }
     copy_todevice_int((void**)&mp->d_ispec_selected_rec_loc,ispec_selected_rec_loc,mp->nrec_local);
     free(ispec_selected_rec_loc);
   }
-    copy_todevice_int((void**)&mp->d_ispec_selected_rec,h_ispec_selected_rec,(*nrec));
+  copy_todevice_int((void**)&mp->d_ispec_selected_rec,h_ispec_selected_rec,(*nrec));
 
 #ifdef USE_MESH_COLORING_GPUX
   mp->use_mesh_coloring_gpu = 1;
@@ -414,13 +436,13 @@ void FC_FUNC_(prepare_fields_acoustic_device,
 
   // allocates arrays on device (GPU)
   int size = mp->NGLOB_AB;
-  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_potential_acoustic),sizeof(realw)*size),2001);
-  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_potential_dot_acoustic),sizeof(realw)*size),2002);
-  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_potential_dot_dot_acoustic),sizeof(realw)*size),2003);
+  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_potential_acoustic),sizeof(field)*size),2001);
+  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_potential_dot_acoustic),sizeof(field)*size),2002);
+  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_potential_dot_dot_acoustic),sizeof(field)*size),2003);
   // initializes values to zero
-  //print_CUDA_error_if_any(cudaMemset(mp->d_potential_acoustic,0,sizeof(realw)*size),2007);
-  //print_CUDA_error_if_any(cudaMemset(mp->d_potential_dot_acoustic,0,sizeof(realw)*size),2007);
-  //print_CUDA_error_if_any(cudaMemset(mp->d_potential_dot_dot_acoustic,0,sizeof(realw)*size),2007);
+  //print_CUDA_error_if_any(cudaMemset(mp->d_potential_acoustic,0,sizeof(field)*size),2007);
+  //print_CUDA_error_if_any(cudaMemset(mp->d_potential_dot_acoustic,0,sizeof(field)*size),2007);
+  //print_CUDA_error_if_any(cudaMemset(mp->d_potential_dot_dot_acoustic,0,sizeof(field)*size),2007);
 
   #ifdef USE_TEXTURES_FIELDS
   {
@@ -444,7 +466,7 @@ void FC_FUNC_(prepare_fields_acoustic_device,
   // mpi buffer
   mp->size_mpi_buffer_potential = (mp->num_interfaces_ext_mesh) * (mp->max_nibool_interfaces_ext_mesh);
   if (mp->size_mpi_buffer_potential > 0){
-    print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_send_potential_dot_dot_buffer),mp->size_mpi_buffer_potential *sizeof(realw)),2004);
+    print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_send_potential_dot_dot_buffer),mp->size_mpi_buffer_potential *sizeof(field)),2004);
   }
 
   // mass matrix
@@ -467,7 +489,6 @@ void FC_FUNC_(prepare_fields_acoustic_device,
   print_CUDA_error_if_any(cudaMemcpy2D(mp->d_rhostore, NGLL3_PADDED*sizeof(realw),
                                        rhostore, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
                                        mp->NSPEC_AB, cudaMemcpyHostToDevice),2106);
-
 
   // non-padded array
   copy_todevice_realw((void**)&mp->d_kappastore,kappastore,NGLL3*mp->NSPEC_AB);
@@ -498,15 +519,6 @@ void FC_FUNC_(prepare_fields_acoustic_device,
       print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_b_absorb_potential,mp->d_b_reclen_potential),2201);
       print_CUDA_error_if_any(cudaMemcpy(mp->d_b_absorb_potential,b_absorb_potential,mp->d_b_reclen_potential,cudaMemcpyHostToDevice),2202);
     }
-  }
-
-  // for seismograms
-  if (mp->nrec_local > 0){
-    print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_station_seismo_potential),
-                                       mp->nrec_local*NGLL3*sizeof(realw)),2107);
-
-    mp->h_station_seismo_potential = (realw*) malloc( mp->nrec_local*NGLL3*sizeof(realw) );
-    if (mp->h_station_seismo_potential == NULL) exit_on_error("error allocating h_station_seismo_potential");
   }
 
   // coupling with elastic parts
@@ -548,9 +560,9 @@ void FC_FUNC_(prepare_fields_acoustic_adj_dev,
 
   // allocates backward/reconstructed arrays on device (GPU)
   int size = mp->NGLOB_AB;
-  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_b_potential_acoustic),sizeof(realw)*size),3014);
-  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_b_potential_dot_acoustic),sizeof(realw)*size),3015);
-  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_b_potential_dot_dot_acoustic),sizeof(realw)*size),3016);
+  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_b_potential_acoustic),sizeof(field)*size),3014);
+  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_b_potential_dot_acoustic),sizeof(field)*size),3015);
+  print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_b_potential_dot_dot_acoustic),sizeof(field)*size),3016);
   // initializes values to zero
   //print_CUDA_error_if_any(cudaMemset(mp->d_b_potential_acoustic,0,sizeof(realw)*size),3007);
   //print_CUDA_error_if_any(cudaMemset(mp->d_b_potential_dot_acoustic,0,sizeof(realw)*size),3007);
@@ -598,7 +610,7 @@ void FC_FUNC_(prepare_fields_acoustic_adj_dev,
 
   // mpi buffer
   if (mp->size_mpi_buffer_potential > 0){
-    print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_b_send_potential_dot_dot_buffer),mp->size_mpi_buffer_potential*sizeof(realw)),3014);
+    print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_b_send_potential_dot_dot_buffer),mp->size_mpi_buffer_potential*sizeof(field)),3014);
   }
 
 #ifdef ENABLE_VERY_SLOW_ERROR_CHECKING
@@ -618,6 +630,7 @@ void FC_FUNC_(prepare_fields_elastic_device,
               PREPARE_FIELDS_ELASTIC_DEVICE)(long* Mesh_pointer,
                                              realw* rmassx, realw* rmassy, realw* rmassz,
                                              realw* rho_vp, realw* rho_vs,
+                                             realw* h_kappav, realw* h_muv,
                                              int* num_phase_ispec_elastic,
                                              int* phase_ispec_inner_elastic,
                                              int* ispec_is_elastic,
@@ -628,7 +641,7 @@ void FC_FUNC_(prepare_fields_elastic_device,
                                              int* ATTENUATION,
                                              int* R_size,
                                              realw* R_xx,realw* R_yy,realw* R_xy,realw* R_xz,realw* R_yz,
-                                             realw* one_minus_sum_beta,realw* factor_common,
+                                             realw* factor_common,
                                              realw* alphaval,realw* betaval,realw* gammaval,
                                              int* APPROXIMATE_OCEAN_LOAD,
                                              realw* rmass_ocean_load,
@@ -740,20 +753,6 @@ void FC_FUNC_(prepare_fields_elastic_device,
   // debug
   //synchronize_mpi();
 
-  // for seismograms
-  if (mp->nrec_local > 0){
-    // debug
-    //printf("prepare_fields_elastic_device: rank %d - seismogram setup\n",mp->myrank);
-
-    print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_station_seismo_field),3*NGLL3*(mp->nrec_local)*sizeof(realw)),4015);
-
-    mp->h_station_seismo_field = (realw*) malloc( 3*NGLL3*(mp->nrec_local)*sizeof(realw) );
-    if (mp->h_station_seismo_field == NULL) exit_on_error("h_station_seismo_field not allocated \n");
-  }
-
-  // debug
-  //synchronize_mpi();
-
   // absorbing conditions
   if (mp->absorbing_conditions && mp->d_num_abs_boundary_faces > 0){
 
@@ -778,6 +777,15 @@ void FC_FUNC_(prepare_fields_elastic_device,
 
     }
   }
+  int size_padded = NGLL3_PADDED*mp->NSPEC_AB;
+  print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_kappav, size_padded*sizeof(realw)),1010);
+  print_CUDA_error_if_any(cudaMalloc((void**) &mp->d_muv, size_padded*sizeof(realw)),1011);
+  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_kappav, NGLL3_PADDED*sizeof(realw),
+                                       h_kappav, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1510);
+  print_CUDA_error_if_any(cudaMemcpy2D(mp->d_muv, NGLL3_PADDED*sizeof(realw),
+                                       h_muv, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
+                                       mp->NSPEC_AB, cudaMemcpyHostToDevice),1511);
 
   // debug
   //synchronize_mpi();
@@ -811,7 +819,6 @@ void FC_FUNC_(prepare_fields_elastic_device,
     copy_todevice_realw((void**)&mp->d_R_xz,R_xz,size);
     copy_todevice_realw((void**)&mp->d_R_yz,R_yz,size);
     // attenuation factors
-    copy_todevice_realw((void**)&mp->d_one_minus_sum_beta,one_minus_sum_beta,NGLL3*mp->NSPEC_AB);
     copy_todevice_realw((void**)&mp->d_factor_common,factor_common,N_SLS*NGLL3*mp->NSPEC_AB);
     // alpha,beta,gamma factors
     copy_todevice_realw((void**)&mp->d_alphaval,alphaval,N_SLS);
@@ -826,7 +833,7 @@ void FC_FUNC_(prepare_fields_elastic_device,
     //synchronize_mpi();
 
     // Assuming NGLLX==5. Padded is then 128 (5^3+3)
-    int size_padded = NGLL3_PADDED * (mp->NSPEC_AB);
+    size_padded = NGLL3_PADDED * (mp->NSPEC_AB);
 
     // allocates memory on GPU
     print_CUDA_error_if_any(cudaMalloc((void**)&(mp->d_c11store),size_padded*sizeof(realw)),4700);
@@ -963,9 +970,6 @@ void FC_FUNC_(prepare_fields_elastic_device,
     print_CUDA_error_if_any(cudaMemcpy2D(mp->d_c66store, NGLL3_PADDED*sizeof(realw),
                                          c66store, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
                                          mp->NSPEC_AB, cudaMemcpyHostToDevice),4800);
-
-
-
   }
 
   // ocean load approximation
@@ -1197,7 +1201,7 @@ void FC_FUNC_(prepare_sim2_or_3_const_device,
   mp->nadj_rec_local = *nadj_rec_local;
   if (mp->nadj_rec_local > 0){
     print_CUDA_error_if_any(cudaMalloc((void**)&mp->d_source_adjoint,
-                                       (mp->nadj_rec_local)*3*sizeof(realw)*(*NTSTEP_BETWEEN_READ_ADJSRC)),6005);
+                                       (mp->nadj_rec_local)* NDIM * sizeof(field) * (*NTSTEP_BETWEEN_READ_ADJSRC)),6005);
   }
 
 #ifdef ENABLE_VERY_SLOW_ERROR_CHECKING
@@ -1317,7 +1321,6 @@ void FC_FUNC_(prepare_fields_gravity_device,
       print_CUDA_error_if_any(cudaMemcpy2D(mp->d_rhostore, NGLL3_PADDED*sizeof(realw),
                                            rhostore, NGLL3*sizeof(realw), NGLL3*sizeof(realw),
                                            mp->NSPEC_AB, cudaMemcpyHostToDevice),4800);
-
     }
   }
 
@@ -1371,10 +1374,9 @@ void FC_FUNC_(prepare_seismogram_fields,
 extern "C"
 void FC_FUNC_(prepare_fault_device,
               PREPARE_FAULT_DEVICE)(long* Mesh_pointer,
-                            int* KELVIN_VOIGT_DAMPING,
+                                    int* KELVIN_VOIGT_DAMPING,
 //                            int* testtrue,
-                                realw* Kelvin_Voigt_eta)
-{
+                                    realw* Kelvin_Voigt_eta) {
 
   TRACE("prepare_fault_device");
 
@@ -1385,7 +1387,7 @@ void FC_FUNC_(prepare_fault_device,
 //    if(! (*KELVIN_VOIGT_DAMPING)) printf("\nKV test pass!\n");
 //    printf("myrank = %d , size of damping = %6d, isAllocated? = %d\n",mp->myrank,sizeof(Kelvin_Voigt_eta),mp -> Kelvin_Voigt_damping);
     copy_todevice_realw((void**)&mp->d_Kelvin_Voigt_eta,Kelvin_Voigt_eta,mp-> NSPEC_AB);
-}
+  }
 }
 
 
@@ -1413,6 +1415,8 @@ TRACE("prepare_cleanup_device");
   // frees allocated memory arrays
   Mesh* mp = (Mesh*)(*Mesh_pointer);
 
+  cudaFree(mp->d_irregular_element_number);
+
   // frees memory on GPU
   // mesh
   cudaFree(mp->d_xix);
@@ -1424,8 +1428,6 @@ TRACE("prepare_cleanup_device");
   cudaFree(mp->d_gammax);
   cudaFree(mp->d_gammay);
   cudaFree(mp->d_gammaz);
-  cudaFree(mp->d_kappav);
-  cudaFree(mp->d_muv);
 
   // absorbing boundaries
   if (*ABSORBING_CONDITIONS && mp->d_num_abs_boundary_faces > 0){
@@ -1459,10 +1461,10 @@ TRACE("prepare_cleanup_device");
     cudaFree(mp->d_hxir);
     cudaFree(mp->d_hetar);
     cudaFree(mp->d_hgammar);
-    cudaFree(mp->d_seismograms_d);
-    cudaFree(mp->d_seismograms_v);
-    cudaFree(mp->d_seismograms_a);
-    cudaFree(mp->d_seismograms_p);
+    if (mp->save_seismograms_d) cudaFree(mp->d_seismograms_d);
+    if (mp->save_seismograms_v) cudaFree(mp->d_seismograms_v);
+    if (mp->save_seismograms_a) cudaFree(mp->d_seismograms_a);
+    if (mp->save_seismograms_p) cudaFree(mp->d_seismograms_p);
     cudaFree(mp->d_nu);
     cudaFree(mp->d_ispec_selected_rec_loc);
     }
@@ -1494,16 +1496,10 @@ TRACE("prepare_cleanup_device");
       cudaFree(mp->d_rho_ac_kl);
       cudaFree(mp->d_kappa_ac_kl);
       if (*APPROXIMATE_HESS_KL) {
-  cudaFree(mp->d_hess_ac_kl);
-  cudaFree(mp->d_hess_rho_ac_kl);
-  cudaFree(mp->d_hess_kappa_ac_kl);
+        cudaFree(mp->d_hess_ac_kl);
+        cudaFree(mp->d_hess_rho_ac_kl);
+        cudaFree(mp->d_hess_kappa_ac_kl);
       }
-    }
-
-
-    if (mp->nrec_local > 0){
-      cudaFree(mp->d_station_seismo_potential);
-      free(mp->h_station_seismo_potential);
     }
 
   } // ACOUSTIC_SIMULATION
@@ -1524,11 +1520,6 @@ TRACE("prepare_cleanup_device");
     cudaFree(mp->d_phase_ispec_inner_elastic);
     cudaFree(mp->d_ispec_is_elastic);
 
-    if (mp->nrec_local > 0){
-      cudaFree(mp->d_station_seismo_field);
-      free(mp->h_station_seismo_field);
-    }
-
     if (*ABSORBING_CONDITIONS && mp->d_num_abs_boundary_faces > 0){
       cudaFree(mp->d_rho_vp);
       cudaFree(mp->d_rho_vs);
@@ -1536,6 +1527,9 @@ TRACE("prepare_cleanup_device");
       if (mp->simulation_type == 3 || ( mp->simulation_type == 1 && mp->save_forward ))
           cudaFree(mp->d_b_absorb_field);
     }
+
+    cudaFree(mp->d_kappav);
+    cudaFree(mp->d_muv);
 
     if (mp->simulation_type == 3) {
       cudaFree(mp->d_b_displ);
@@ -1549,10 +1543,10 @@ TRACE("prepare_cleanup_device");
         cudaFree(mp->d_kappa_kl);
       }
       if (*APPROXIMATE_HESS_KL) {
-  cudaFree(mp->d_hess_el_kl);
-  cudaFree(mp->d_hess_rho_el_kl);
-  cudaFree(mp->d_hess_kappa_el_kl);
-  cudaFree(mp->d_hess_mu_el_kl);
+        cudaFree(mp->d_hess_el_kl);
+        cudaFree(mp->d_hess_rho_el_kl);
+        cudaFree(mp->d_hess_kappa_el_kl);
+        cudaFree(mp->d_hess_mu_el_kl);
       }
     }
 
@@ -1575,7 +1569,6 @@ TRACE("prepare_cleanup_device");
 
     if (*ATTENUATION ){
       cudaFree(mp->d_factor_common);
-      cudaFree(mp->d_one_minus_sum_beta);
       cudaFree(mp->d_alphaval);
       cudaFree(mp->d_betaval);
       cudaFree(mp->d_gammaval);

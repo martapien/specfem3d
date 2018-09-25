@@ -5,8 +5,7 @@ module mesh_tools
   use specfem_par, only: CUSTOM_REAL, HUGEVAL, TINYVAL, NGNOD, NUM_ITER, NPROC, MAX_STRING_LEN, &
                          NGLLX, NGLLY, NGLLZ, NDIM, NSPEC_AB, NGLOB_AB, MIDX, MIDY, MIDZ, &
                          LOCAL_PATH, xigll, yigll, zigll, &
-                         ibool, xstore, ystore, zstore, &
-                         xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz
+                         ibool, xstore, ystore, zstore
 
   use specfem_par_elastic, only: ispec_is_elastic
   use specfem_par_acoustic, only: ispec_is_acoustic
@@ -125,7 +124,7 @@ contains
     double precision,   dimension(:,:), allocatable                   :: xi_all, eta_all, gamma_all
     double precision,   dimension(:,:), allocatable                   ::  x_found_all, y_found_all, z_found_all
     integer,            dimension(:,:), allocatable                   :: ispec_selected_all
-    integer                                                           :: iproc
+    integer                                                           :: iproc, ier
 
     !! to avoid compler error when calling gather_all*
     double precision,  dimension(1)                                   :: distance_from_target_dummy
@@ -133,22 +132,27 @@ contains
     double precision,  dimension(1)                                   :: x_found_dummy, y_found_dummy, z_found_dummy
     integer,           dimension(1)                                   :: ispec_selected_dummy, islice_selected_dummy
 
+    allocate(distance_from_target_all(1,0:NPROC-1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 322')
+    allocate(xi_all(1,0:NPROC-1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 323')
+    allocate(eta_all(1,0:NPROC-1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 324')
+    allocate(gamma_all(1,0:NPROC-1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 325')
+    allocate(x_found_all(1,0:NPROC-1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 326')
+    allocate(y_found_all(1,0:NPROC-1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 327')
+    allocate(z_found_all(1,0:NPROC-1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 328')
 
-    allocate(distance_from_target_all(1,0:NPROC-1), &
-             xi_all(1,0:NPROC-1), &
-             eta_all(1,0:NPROC-1), &
-             gamma_all(1,0:NPROC-1), &
-             x_found_all(1,0:NPROC-1), &
-             y_found_all(1,0:NPROC-1), &
-             z_found_all(1,0:NPROC-1))
+    allocate(ispec_selected_all(1,0:NPROC-1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 329')
 
-    allocate(ispec_selected_all(1,0:NPROC-1))
+    distance_from_target = sqrt( (x_to_locate - x_found)**2 + (y_to_locate - y_found)**2 + (z_to_locate - z_found)**2)
 
-    distance_from_target = sqrt( (x_to_locate - x_found)**2&
-                                +(y_to_locate - y_found)**2&
-                                +(z_to_locate - z_found)**2)
-
-    !! it's just to avoid compiler error
+    !! this is just to avoid a compiler error
     distance_from_target_dummy(1)=distance_from_target
     xi_dummy(1)=xi
     eta_dummy(1)=eta
@@ -437,9 +441,7 @@ contains
           factor = 1.0
           call compute_arrays_source_cmt(ispec,interparray, &
                hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
-               Mxx,Myy,Mzz,Mxy,Mxz,Myz, &
-               xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz, &
-               NSPEC_AB)
+               Mxx,Myy,Mzz,Mxy,Mxz,Myz)
 
        else if (ispec_is_acoustic(ispec)) then
           ! scalar moment of moment tensor values read in from CMTSOLUTION
@@ -516,6 +518,7 @@ contains
        ! allocates memory
        if (.not. allocated(rmass_acoustic)) then
           allocate(rmass_acoustic(NGLOB_AB),stat=ier)
+          if (ier /= 0) call exit_MPI_without_rank('error allocating array 330')
           if (ier /= 0) stop 'error allocating array rmass_acoustic'
        endif
        rmass_acoustic(:) = 0._CUSTOM_REAL
@@ -549,7 +552,10 @@ contains
 
     if (ELASTIC_SIMULATION) then
        ! returns elastic mass matrix
-       if (.not. allocated(rmass)) allocate(rmass(NGLOB_AB))
+       if (.not. allocated(rmass)) then
+         allocate(rmass(NGLOB_AB),stat=ier)
+         if (ier /= 0) call exit_MPI_without_rank('error allocating array 331')
+       endif
        rmass(:) = 0._CUSTOM_REAL
        if (PML_CONDITIONS) then
           write(*,*) ' PML  not implemented yet '
@@ -589,8 +595,10 @@ contains
         endif
         ! acoustic domains
         if (ACOUSTIC_SIMULATION) then
-           if (.not. allocated(rmassz_acoustic)) allocate( rmassz_acoustic(nglob_ab), stat=ier)
-           !if (ier /= 0) stop 'error in allocate 22'
+           if (.not. allocated(rmassz_acoustic)) then
+             allocate(rmassz_acoustic(nglob_ab), stat=ier)
+             if (ier /= 0) call exit_MPI_without_rank('error allocating array 332')
+           endif
            rmassz_acoustic(:) = 0._CUSTOM_REAL
         endif
 

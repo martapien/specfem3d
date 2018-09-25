@@ -122,9 +122,6 @@
   if (CUSTOM_REAL /= SIZE_REAL .and. CUSTOM_REAL /= SIZE_DOUBLE) &
     call exit_MPI(myrank,'wrong size of CUSTOM_REAL for reals')
 
-! for the number of standard linear solids for attenuation
-  if (N_SLS /= 3) call exit_MPI(myrank,'number of SLS must be 3')
-
   ! for noise simulations, we need to save movies at the surface (where the noise is generated)
   ! and thus we force MOVIE_SURFACE to be .true., in order to use variables defined for surface movies later
   if (NOISE_TOMOGRAPHY /= 0) then
@@ -141,35 +138,35 @@
     else
       write(IMAIN,*) 'using UTM projection in region ',UTM_PROJECTION_ZONE
     endif
-
     write(IMAIN,*)
+
     if (ATTENUATION) then
       write(IMAIN,*) 'incorporating attenuation using ',N_SLS,' standard linear solids'
       if (USE_OLSEN_ATTENUATION) then
-        write(IMAIN,*) 'using attenuation from Olsen et al.'
+        write(IMAIN,*) '  using attenuation from Olsen et al.'
       else
-        write(IMAIN,*) 'not using attenuation from Olsen et al.'
+        write(IMAIN,*) '  not using attenuation from Olsen et al.'
       endif
     else
       write(IMAIN,*) 'no attenuation'
     endif
-
     write(IMAIN,*)
+
     if (ANISOTROPY) then
       write(IMAIN,*) 'incorporating anisotropy'
     else
       write(IMAIN,*) 'no anisotropy'
     endif
-
     write(IMAIN,*)
+
     if (APPROXIMATE_OCEAN_LOAD) then
       write(IMAIN,*) 'incorporating the oceans using equivalent load'
       if (TOPOGRAPHY) write(IMAIN,*) ' with elevation from topography file'
     else
       write(IMAIN,*) 'no oceans'
     endif
-
     write(IMAIN,*)
+
     if (STACEY_ABSORBING_CONDITIONS) then
       write(IMAIN,*) 'incorporating Stacey absorbing conditions'
     else
@@ -179,27 +176,24 @@
         write(IMAIN,*) 'no absorbing condition'
       endif
     endif
-
     write(IMAIN,*)
+
     if (USE_FORCE_POINT_SOURCE) then
        write(IMAIN,*) 'using a FORCESOLUTION source instead of a CMTSOLUTION source'
     else
        write(IMAIN,*) 'using a CMTSOLUTION source'
-       write(IMAIN,*)
     endif
-
-    write(IMAIN,*)
     if (USE_RICKER_TIME_FUNCTION) then
-       write(IMAIN,*) 'using a Ricker source time function'
+       write(IMAIN,*) '  with a Ricker source time function'
     else
        if (USE_FORCE_POINT_SOURCE) then
-          write(IMAIN,*) 'using a quasi-Heaviside source time function'
-          write(IMAIN,*)
+          write(IMAIN,*) '  with a quasi-Heaviside source time function'
        else
-          write(IMAIN,*) 'using a Gaussian source time function'
-          write(IMAIN,*)
+          write(IMAIN,*) '  with a Gaussian source time function'
        endif
     endif
+    write(IMAIN,*)
+
     call flush_IMAIN()
   endif
 
@@ -226,6 +220,7 @@
     NY_TOPO = NY_TOPO_FILE
 
     allocate(itopo_bathy(NX_TOPO,NY_TOPO),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 615')
     if (ier /= 0) stop 'error allocating array itopo_bathy'
 
     call read_topo_bathy_file(itopo_bathy,NX_TOPO,NY_TOPO)
@@ -240,6 +235,7 @@
     NX_TOPO = 1
     NY_TOPO = 1
     allocate(itopo_bathy(NX_TOPO,NY_TOPO),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 616')
     if (ier /= 0) stop 'error allocating dummy array itopo_bathy'
 
   endif

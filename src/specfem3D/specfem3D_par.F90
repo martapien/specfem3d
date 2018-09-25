@@ -44,6 +44,10 @@ module specfem_par
   integer, dimension(:,:,:,:), allocatable :: ibool
   real(kind=CUSTOM_REAL), dimension(:), allocatable :: xstore,ystore,zstore
 
+  integer :: NSPEC_IRREGULAR
+  integer, dimension(:), allocatable :: irregular_element_number
+  real(kind=CUSTOM_REAL) :: xix_regular,jacobian_regular
+
   real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: &
         xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz,jacobian
 
@@ -59,6 +63,10 @@ module specfem_par
   integer(kind=8) :: Mesh_pointer
 
   integer(kind=8) :: Fault_pointer
+
+! ASDF
+! asdf file handle
+  integer :: current_asdf_handle
 
 ! use integer array to store topography values
   integer :: NX_TOPO,NY_TOPO
@@ -117,6 +125,8 @@ module specfem_par
   double precision, dimension(:), allocatable :: utm_x_source,utm_y_source
   double precision, external :: comp_source_time_function
   double precision :: t0
+  integer :: yr,mo,da,jda,ho,mi
+  double precision :: sec
   real(kind=CUSTOM_REAL) :: stf_used_total
   integer :: nsources_local
   real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: user_source_time_function
@@ -124,7 +134,6 @@ module specfem_par
   ! for acoustic sources: takes +/- 1 sign, depending on sign(Mxx)
   ! [ = sign(Myy) = sign(Mzz) since they have to be equal in the acoustic setting]
   real(kind=CUSTOM_REAL), dimension(:), allocatable :: pm1_source_encoding
-
 
 ! receiver information
   character(len=MAX_STRING_LEN) :: rec_filename,filtered_rec_filename,dummystring
@@ -142,6 +151,14 @@ module specfem_par
 ! seismograms
   real(kind=CUSTOM_REAL), dimension(:,:,:), allocatable :: seismograms_d,seismograms_v,seismograms_a,seismograms_p
 
+!! DK DK added this temporarily here to make SPECFEM3D and SPECFEM3D_GLOBE much more similar
+!! DK DK in terms of the structure of their main time iteration loop; these are future features
+!! DK DK that are missing in this code but implemented in the other and that could thus be cut and pasted one day
+  integer :: it_begin,it_end
+  integer :: seismo_offset,seismo_current
+  ! adjoint seismograms
+  integer :: it_adj_written
+
 ! Gauss-Lobatto-Legendre points of integration and weights
   double precision, dimension(NGLLX) :: xigll,wxgll
   double precision, dimension(NGLLY) :: yigll,wygll
@@ -149,8 +166,8 @@ module specfem_par
 
 ! array with derivatives of Lagrange polynomials and precalculated products
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLX) :: hprime_xx,hprime_xxT,hprimewgll_xx,hprimewgll_xxT
-  real(kind=CUSTOM_REAL), dimension(NGLLY,NGLLY) :: hprime_yy,hprimewgll_yy
-  real(kind=CUSTOM_REAL), dimension(NGLLZ,NGLLZ) :: hprime_zz,hprimewgll_zz
+  real(kind=CUSTOM_REAL), dimension(NGLLY,NGLLY) :: hprime_yy,hprime_yyT,hprimewgll_yy
+  real(kind=CUSTOM_REAL), dimension(NGLLZ,NGLLZ) :: hprime_zz,hprime_zzT,hprimewgll_zz
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY) :: wgllwgll_xy
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLZ) :: wgllwgll_xz
   real(kind=CUSTOM_REAL), dimension(NGLLY,NGLLZ) :: wgllwgll_yz
@@ -173,6 +190,9 @@ module specfem_par
   double precision, dimension(:), allocatable :: comp_dir_vect_source_N
   double precision, dimension(:), allocatable :: comp_dir_vect_source_Z_UP
 
+! array for NB_RUN_ACOUSTIC_GPU > 1
+  integer, dimension(:), allocatable :: run_number_of_the_source
+
 ! arrays for elemental computations in compute_forces()
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ) :: chi_elem
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ) :: temp1,temp2,temp3,temp4
@@ -188,7 +208,7 @@ module specfem_par
   ! we replace potential_acoustic with potential_acoustic_old with potential_acoustic_new
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ) :: PML_dpotential_dxl_new,PML_dpotential_dyl_new,PML_dpotential_dzl_new
 
-  character(len=MAX_STRING_LEN) :: prname,dsmname
+  character(len=MAX_STRING_LEN) :: prname
 
 ! for assembling in case of external mesh
   integer :: num_interfaces_ext_mesh
@@ -290,7 +310,6 @@ module specfem_par_elastic
   implicit none
 
   ! memory variables and standard linear solids for attenuation
-  real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: one_minus_sum_beta,one_minus_sum_beta_kappa
   real(kind=CUSTOM_REAL), dimension(:,:,:,:,:), allocatable :: factor_common,factor_common_kappa
   real(kind=CUSTOM_REAL), dimension(N_SLS) :: tau_sigma
   real(kind=CUSTOM_REAL) :: min_resolved_period
@@ -377,28 +396,6 @@ module specfem_par_elastic
   real(kind=CUSTOM_REAL), dimension(:,:,:), allocatable :: b_buffer_recv_vector_ext_mesh
   integer, dimension(:), allocatable :: b_request_send_vector_ext_mesh
   integer, dimension(:), allocatable :: b_request_recv_vector_ext_mesh
-
-! *********************************************************************************
-! added by Ping Tong (TP / Tong Ping) for the FK3D calculation
-! FK elastic
-  integer :: npt,nlayer,kpsv
-  integer :: NF_FOR_STORING, NF_FOR_FFT, NPOW_FOR_FFT, NP_RESAMP, NPOW_FOR_INTERP
-  integer :: NPTS_STORED, NPTS_INTERP
-  integer, parameter :: NTIME_BETWEEN_FFT=1  !! not used anymore
-  integer,dimension(:),allocatable :: nbdglb
-  real(kind=CUSTOM_REAL),dimension(:,:),allocatable :: vxbd,vybd,vzbd,txxbd,txybd,txzbd,tyybd,tyzbd,tzzbd
-  real(kind=CUSTOM_REAL) :: Z_REF_for_FK
-  real(kind=CUSTOM_REAL) :: p,phi_FK,theta_FK,xx0,yy0,zz0,ff0,tg,tt0,tmax_fk,df_fk ! source
-  real(kind=CUSTOM_REAL),dimension(:),allocatable :: al_FK,be_FK,mu_FK,h_FK,tmp_for_interp ! model
-  complex(kind=8), dimension(:,:), allocatable :: VX_f, VY_f, VZ_f, TX_f, TY_f, TZ_f
-  real(kind=CUSTOM_REAL),dimension(:,:),allocatable :: VX_t, VY_t, VZ_t, TX_t, TY_t, TZ_t
-  complex(kind=8), dimension(:), allocatable :: WKS_CMPLX_FOR_FFT
-  real(kind=CUSTOM_REAL), dimension(:), allocatable :: WKS_REAL_FOR_FFT
-  real(kind=CUSTOM_REAL), dimension(:), allocatable ::  vx_FK,vy_FK,vz_FK,tx_FK,ty_FK,tz_FK
-  logical :: stag
-  real(kind=CUSTOM_REAL),dimension(:),allocatable  :: xx,yy,zz,xi1,xim,bdlambdamu
-  real(kind=CUSTOM_REAL),dimension(:),allocatable  :: nmx,nmy,nmz  !! normal
-! *********************************************************************************
 
   ! LDDRK time scheme
   real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: displ_lddrk,veloc_lddrk
@@ -620,3 +617,45 @@ module specfem_par_movie
   logical :: MOVIE_SIMULATION
 
 end module specfem_par_movie
+
+!=====================================================================
+
+module specfem_par_coupling
+
+  use constants, only: CUSTOM_REAL
+
+  implicit none
+
+! added by Ping Tong (TP / Tong Ping) for the FK3D calculation
+
+! FK elastic
+  integer :: npt,nlayer,kpsv
+  integer :: NF_FOR_STORING, NF_FOR_FFT, NPOW_FOR_FFT, NP_RESAMP, NPOW_FOR_INTERP
+  integer :: NPTS_STORED, NPTS_INTERP
+
+  integer, parameter :: NTIME_BETWEEN_FFT = 1  !! not used anymore
+
+  integer,dimension(:),allocatable :: nbdglb
+  real(kind=CUSTOM_REAL),dimension(:,:),allocatable :: vxbd,vybd,vzbd,txxbd,txybd,txzbd,tyybd,tyzbd,tzzbd
+  real(kind=CUSTOM_REAL) :: Z_REF_for_FK
+
+  ! source
+  real(kind=CUSTOM_REAL) :: p,xx0,yy0,zz0,ff0,tg,tt0,tmax_fk,df_fk
+  real(kind=CUSTOM_REAL) :: phi_FK,theta_FK
+
+  ! model
+  real(kind=CUSTOM_REAL),dimension(:),allocatable :: al_FK,be_FK,mu_FK,h_FK,tmp_for_interp
+  complex(kind=8), dimension(:,:), allocatable :: VX_f, VY_f, VZ_f, TX_f, TY_f, TZ_f
+  real(kind=CUSTOM_REAL),dimension(:,:),allocatable :: VX_t, VY_t, VZ_t, TX_t, TY_t, TZ_t
+
+  complex(kind=8), dimension(:), allocatable :: WKS_CMPLX_FOR_FFT
+  real(kind=CUSTOM_REAL), dimension(:), allocatable :: WKS_REAL_FOR_FFT
+
+  real(kind=CUSTOM_REAL), dimension(:), allocatable :: vx_FK,vy_FK,vz_FK,tx_FK,ty_FK,tz_FK
+  logical :: stag
+  real(kind=CUSTOM_REAL),dimension(:),allocatable  :: xx,yy,zz,xi1,xim,bdlambdamu
+  ! normal
+  real(kind=CUSTOM_REAL),dimension(:),allocatable  :: nmx,nmy,nmz
+
+end module specfem_par_coupling
+

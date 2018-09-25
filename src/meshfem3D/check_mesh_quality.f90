@@ -126,6 +126,7 @@
   ! debug: for vtk output
   if (CREATE_VTK_FILES) then
     allocate(tmp1(NSPEC),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 1345')
     if (ier /= 0) stop 'error allocating array tmp'
     tmp1(:) = 0.0
   endif
@@ -302,6 +303,7 @@
                      ' ',sngl(current_percent),' %'
       write(14,*) 0.5*(real(iclass/dble(NCLASS)) + real((iclass+1)/dble(NCLASS))),' ',sngl(current_percent)
     enddo
+    write(IMAIN,*)
     close(14)
 
     ! create script for Gnuplot histogram file

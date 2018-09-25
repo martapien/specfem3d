@@ -43,13 +43,11 @@
   module model_coupled_par
 
   ! VM VM my model for DSM coupling
-  use constants
-
-  ! VM VM
   double precision, dimension (:,:), allocatable :: vpv_1D,vsv_1D,density_1D
   double precision, dimension (:), allocatable :: zlayer
   double precision, dimension (:), allocatable :: smooth_vp,smooth_vs
   integer :: ilayer,nlayer,ncoeff,ndeg_poly
+
   double precision :: ZREF,OLON,OLAT
 
   !! MPC gaussain and bubble perturbation definitions
@@ -73,17 +71,11 @@
 
   use constants
 
-  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH, ANISOTROPY, ATTENUATION
+  use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH
 
   implicit none
 
-  integer :: myrank
-
-  ! local parameters
-  integer :: idummy
-
-  ! dummy to ignore compiler warnings
-  idummy = myrank
+  integer,intent(in) :: myrank
 
   ! safety check
   if (.not. (COUPLE_WITH_INJECTION_TECHNIQUE .or. MESH_A_CHUNK_OF_THE_EARTH)) then
@@ -91,7 +83,7 @@
     stop 'Error model coupling'
   endif
 
-  call read_model_for_coupling_or_chunk()
+  call read_model_for_coupling_or_chunk(myrank)
 
   end subroutine model_coupled_broadcast
 
@@ -99,100 +91,110 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine read_model_for_coupling_or_chunk()
+  subroutine read_model_for_coupling_or_chunk(myrank)
+
+  use constants, only: IMAIN,IN_DATA_FILES
 
   use model_coupled_par !! VM VM custom subroutine for coupling with DSM
-  use shared_parameters, only:  ANISOTROPY, ATTENUATION, ADD_GAUSSIAN_PERT_ABSOLUTE, &
+  use shared_parameters, only:  ADD_GAUSSIAN_PERT_ABSOLUTE, &
       ADD_GAUSSIAN_PERT_RELATIVE, ADD_BUBBLE_PERT_RELATIVE
 
   implicit none
+  integer, intent(in) :: myrank
 
-  character(len=256) :: filename
+  ! local parameters
+  character(len=256) :: filename, model1D_file
   character(len=10)  :: line
-  character(len=250) :: model1D_file
-  integer            :: i
   double precision   :: ANGULAR_WIDTH_ETA_RAD, ANGULAR_WIDTH_XI_RAD
-  double precision   :: lat_center_chunk, lon_center_chunk, chunk_depth, chunk_azi
-  double precision   :: radius_of_box_top
-  logical            :: buried_box
-  integer            :: nel_lat, nel_lon, nel_depth
+ double precision   :: lat_center_chunk, lon_center_chunk, chunk_depth, chunk_azi
+ double precision   :: radius_of_box_top
+ logical            :: buried_box
+ integer            :: nel_lat, nel_lon, nel_depth
+  integer :: i,cc,ier
+  double precision :: aa,bb
 
-  !! reading chunk parameters
-  open(27,file='MESH/ParFileMeshChunk',action='read')
-  read(27,'(a)') line
-  read(27,*) ANGULAR_WIDTH_XI_RAD, ANGULAR_WIDTH_ETA_RAD
-  read(27,'(a)') line
-  read(27,*) lon_center_chunk, lat_center_chunk, chunk_azi
-  read(27,'(a)') line
-  read(27,*) chunk_depth
-  read(27,'(a)') line
-  read(27,*) nel_lon,nel_lat, nel_depth
-  read(27,'(a)') line
-  read(27,'(a)') model1D_file
-  read(27,'(a)') line
-  read(27,*) buried_box
-  if (buried_box) then
-     read(27,'(a)') line
-     read(27,*) radius_of_box_top
-     radius_of_box_top =  radius_of_box_top * 1000.
-  else
-     radius_of_box_top = 6371000.
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) 'reading model for coupling or mesh a chunk of the earth...'
+    write(IMAIN,*)
+    call flush_IMAIN()
   endif
-  close(27)
 
-  OLON = lon_center_chunk
-  OLAT = lat_center_chunk
-  ZREF = radius_of_box_top
+! MPC TODO what are these coeffs?
+!  filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//'/coeff_poly_deg12'
+!  open(27,file=trim(filename),iostat=ier)
+!  if (ier /= 0) then
+!    print *,'Error opening file: ',filename
+!    stop 'Error opening coupled coeff_poly_deg12 file'
+!  endif
 
-  !write(*,*) " Reading 1D model "
+!  read(27,*) ndeg_poly
+!  allocate(smooth_vp(0:ndeg_poly),smooth_vs(0:ndeg_poly),stat=ier)
+!  if (ier /= 0) call exit_MPI_without_rank('error allocating array 620')
+!  do i = ndeg_poly,0,-1
+!    read(27,*) aa,bb,cc
+!    smooth_vp(i) = aa
+!    smooth_vs(i) = bb
+    ! write(*,*) a,b
+!  enddo
 
-  !! reading 1D reference model given by polynomial coeffiscients
-  if (ANISOTROPY) then
+!  close(27)
 
-     !! read aniso model
-     write(*,*) " external 1D anisotropic model not defined yet "
-     stop
+    write(*,*) " Reading 1D model "
 
-     if (ATTENUATION) then
-        !! TO DO  ...
-        !! read 1D model with attenuation
-        write(*,*) " external 1D vsico-elastic model not defined yet "
-        stop
+    !! reading chunk parameters
+      open(27,file='MESH/ParFileMeshChunk',action='read')
+      read(27,'(a)') line
+      read(27,*) ANGULAR_WIDTH_XI_RAD, ANGULAR_WIDTH_ETA_RAD
+      read(27,'(a)') line
+      read(27,*) lon_center_chunk, lat_center_chunk, chunk_azi
+      read(27,'(a)') line
+      read(27,*) chunk_depth
+      read(27,'(a)') line
+      read(27,*) nel_lon,nel_lat, nel_depth
+      read(27,'(a)') line
+      read(27,'(a)') model1D_file
+      read(27,'(a)') line
+      read(27,*) buried_box
+      if (buried_box) then
+         read(27,'(a)') line
+         read(27,*) radius_of_box_top
+         radius_of_box_top =  radius_of_box_top * 1000.
+      else
+         radius_of_box_top = 6371000.
+      endif
+      close(27)
 
-     else
-        !! TO DO  ...
-     end if
+      OLON = lon_center_chunk
+      OLAT = lat_center_chunk
+      ZREF = radius_of_box_top
 
-  else
 
-     if (ATTENUATION) then
+    filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//trim(model1D_file)
+    open(27,file=trim(filename),iostat=ier)
+    if (ier /= 0) then
+      print *,'Error opening file: ',filename
+      stop 'Error opening coupled model file'
+    endif
 
-        !! TO DO  ...
-        !! read 1D model with attenuation
-        write(*,*) " external 1D vsico-elastic model not defined yet "
-        stop
-
-     else
-
-        !! isotropic 1D model:
-        filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//trim(model1D_file)
-        open(27,file=trim(filename))
-        read(27,*) nlayer,ncoeff
-        allocate(vpv_1D(nlayer,ncoeff))
-        allocate(vsv_1D(nlayer,ncoeff))
-        allocate(density_1D(nlayer,ncoeff))
-        allocate(zlayer(nlayer))
-        do i=1,nlayer
-           read(27,*) zlayer(i)
-           read(27,*) vpv_1D(i,:)
-           read(27,*) vsv_1D(i,:)
-           read(27,*) density_1D(i,:)
-        enddo
-        close(27)
-
-     end if
-
-  end if
+    read(27,*) nlayer,ncoeff
+    allocate(vpv_1D(nlayer,ncoeff),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 621')
+    allocate(vsv_1D(nlayer,ncoeff),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 622')
+    allocate(density_1D(nlayer,ncoeff),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 623')
+    allocate(zlayer(nlayer),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 624')
+    do i = 1,nlayer
+      read(27,*) zlayer(i)
+      read(27,*) vpv_1D(i,:)
+      read(27,*) vsv_1D(i,:)
+      read(27,*) density_1D(i,:)
+    enddo
+    !read(27,*) ZREF ! radius_of_box_top
+    !read(27,*) OLON,OLAT !lon_center_chunk, lat_center_chunk
+    close(27)
 
 
   if (ADD_GAUSSIAN_PERT_ABSOLUTE) then
@@ -261,7 +263,7 @@
     Ampl_pert_rho = dble(Ampl_pert_rho_read) / 100.d0
   endif
 
-  !! hardcoded gaussian pert (todo need to read an input file)
+  !! hardcoded gaussian pert (ToDo need to read an input file)
   !! x_center_gauss=0.
   !! y_center_gauss=0.
   !! z_center_gauss=-100000.
@@ -271,6 +273,7 @@
   !! Ampl_pert_vp=1000.d0 !! abs olute amplitude perturbation
   !! Ampl_pert_vs=400.d0
   ! Ampl_pert_rho=400.d0
+
 
   end subroutine read_model_for_coupling_or_chunk
 
@@ -287,7 +290,7 @@
   double precision radius
   double precision :: x,y,z
 
-  radius =  dsqrt(x**2 + y**2 + (z+zref)**2) / 1000.d0
+  radius =  dsqrt(x**2 + y**2 + (z+ZREF)**2) / 1000.d0
   il = 1
   do while (radius > zlayer(il) .and. il < nlayer)
      il = il + 1
@@ -316,7 +319,7 @@
   double precision, intent(in) :: xmesh,ymesh,zmesh
 
   ! density, Vp and Vs
-  real(kind=CUSTOM_REAL) :: vp,vs,rho
+  real(kind=CUSTOM_REAL),intent(out) :: vp,vs,rho
 
   ! local parameters
   double precision :: x,y,z
@@ -432,57 +435,38 @@
 
   subroutine model_1D_coupling(x_eval,y_eval,z_eval,rho_final,vp_final,vs_final,r1)
 
+  use constants, only: CUSTOM_REAL
+
   use model_coupled_par
+
   implicit none
 
-  double precision r1,radius
-  double precision rho,vp,vs
-  double precision x_eval,y_eval,z_eval
-  real(kind=CUSTOM_REAL) rho_final,vp_final,vs_final
+  double precision,intent(in) :: x_eval,y_eval,z_eval
+
+  real(kind=CUSTOM_REAL),intent(out) :: rho_final,vp_final,vs_final
+
+  ! local parameters
+  double precision :: r1,radius
+  double precision :: rho,vp,vs
 
   double precision, parameter :: Xtol = 1d-2
 
-  double precision :: xmin_pert, xmax_pert, ymin_pert, ymax_pert, zmin_pert, zmax_pert
-
-
-  !! perturbed zone
-!!$  xmin_pert = -100000.
-!!$  xmax_pert =  100000.
-!!$  ymin_pert = -100000.
-!!$  ymax_pert =  100000.
-!!$  zmin_pert = -180000.
-!!$  zmax_pert =  -80000.
-
-
-  radius = dsqrt(x_eval**2 + y_eval**2 + (z_eval+zref)**2)
-
-!!$  if ( x_eval < 10. .and. x_eval > -10. .and. y_eval < 10. .and. y_eval > -10.) then
-!!$     write(*,*)  z_eval / 1000. , radius / 1000. , 6371 + z_eval/ 1000. , zref
-!!$  end if
+  radius = dsqrt(x_eval**2 + y_eval**2 + (z_eval+ZREF)**2)
 
   radius = radius / 1000.d0
-  r1=radius
+  r1 = radius
 
   ! get vp,vs and rho
   radius = radius / zlayer(nlayer)
+
   vp = Interpol(vpv_1D,ilayer,radius,nlayer)
   vs = Interpol(vsv_1D,ilayer,radius,nlayer)
   rho = Interpol(density_1D,ilayer,radius,nlayer)
 
+  ! converts units to m/s
   vp_final = vp * 1000.d0
   vs_final = vs * 1000.d0
   rho_final = rho * 1000.d0
-
-  !! add perturbation
-!!$  if ( x_eval > xmin_pert .and.  x_eval < xmax_pert .and. &
-!!$       y_eval > ymin_pert .and.  y_eval < ymax_pert .and. &
-!!$       z_eval > zmin_pert .and.  z_eval < zmax_pert ) then
-!!$
-!!$     vp_final = 1.1*vp_final
-!!$     vs_final = 1.1*vs_final
-!!$     rho_final = 1.1*rho_final
-!!$
-!!$  end if
 
 
   contains

@@ -66,7 +66,9 @@
     write(IMAIN,*) '**** Specfem 3-D Solver - MPI version f90 ****'
     write(IMAIN,*) '**********************************************'
     write(IMAIN,*)
-    write(IMAIN,*) 'Version: ', git_version
+    write(IMAIN,*) 'Running Git package version of the code: ', git_package_version
+    write(IMAIN,*) 'which is Git ', git_commit_version
+    write(IMAIN,*) 'dating ', git_date_version
     write(IMAIN,*)
     if (FIX_UNDERFLOW_PROBLEM) write(IMAIN,*) 'Fixing slow underflow trapping problem using small initial field'
     write(IMAIN,*)
@@ -128,24 +130,29 @@
     call adios_setup()
   endif
 
+  if ((SIMULATION_TYPE == 2 .or. SIMULATION_TYPE == 3) .and. READ_ADJSRC_ASDF) then
+    call asdf_setup(current_asdf_handle)
+  endif
+
   ! reads in numbers of spectral elements and points for the part of the mesh handled by this process
   call create_name_database(prname,myrank,LOCAL_PATH)
 
+! MPC review why don't we need this
 ! for coupling with EXTERNAL CODE !! CD CD modify here
-  if (COUPLE_WITH_INJECTION_TECHNIQUE .or. SAVE_RUN_BOUN_FOR_KH_INTEGRAL) then
-     call create_name_database(dsmname,myrank,TRACTION_PATH) !!! MPC to check
+!  if (COUPLE_WITH_INJECTION_TECHNIQUE .or. SAVE_RUN_BOUN_FOR_KH_INTEGRAL) then
+!     call create_name_database(dsmname,myrank,TRACTION_PATH) !!! MPC to check
 
-    if (myrank == 0) then
-       write(IMAIN,*)
-       write(IMAIN,*) '**********************************************'
-       write(IMAIN,*) '      **** USING HYBRID METHOD  ****'
-       write(IMAIN,*) '**********************************************'
-       write(IMAIN,*)
-       write(IMAIN,*) ' create name database ',COUPLE_WITH_INJECTION_TECHNIQUE
-       write(IMAIN,*)
-       write(IMAIN,*) '**********************************************'
-    endif
-  endif
+!    if (myrank == 0) then
+!       write(IMAIN,*)
+!       write(IMAIN,*) '**********************************************'
+!       write(IMAIN,*) '      **** USING HYBRID METHOD  ****'
+!       write(IMAIN,*) '**********************************************'
+!       write(IMAIN,*)
+!       write(IMAIN,*) ' create name database ',COUPLE_WITH_INJECTION_TECHNIQUE
+!       write(IMAIN,*)
+!       write(IMAIN,*) '**********************************************'
+!    endif
+!  endif
 
 ! read the value of NSPEC_AB and NGLOB_AB because we need it to define some array sizes below
   if (ADIOS_FOR_MESH) then
@@ -184,35 +191,83 @@
     NSPEC_ANISO = 1
   endif
 
+  allocate(irregular_element_number(NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2388')
+    if (ier /= 0) stop 'error allocating arrays for irregular element numbering'
+
   ! allocate arrays for storing the databases
-  allocate(ibool(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           xix(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           xiy(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           xiz(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           etax(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           etay(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           etaz(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           gammax(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           gammay(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           gammaz(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           jacobian(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  allocate(ibool(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2389')
+    if (ier /= 0) stop 'error allocating ibool'
+
+  if (NSPEC_IRREGULAR > 0) then
+     allocate(xix(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2390')
+     allocate(xiy(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2391')
+     allocate(xiz(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2392')
+     allocate(etax(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2393')
+     allocate(etay(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2394')
+     allocate(etaz(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2395')
+     allocate(gammax(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2396')
+     allocate(gammay(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2397')
+     allocate(gammaz(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2398')
+     allocate(jacobian(NGLLX,NGLLY,NGLLZ,NSPEC_IRREGULAR),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 2399')
+  else
+    allocate(xix(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2400')
+    allocate(xiy(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2401')
+    allocate(xiz(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2402')
+    allocate(etax(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2403')
+    allocate(etay(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2404')
+    allocate(etaz(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2405')
+    allocate(gammax(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2406')
+    allocate(gammay(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2407')
+    allocate(gammaz(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2408')
+    allocate(jacobian(1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2409')
+  endif
   if (ier /= 0) stop 'error allocating arrays for databases'
 
   ! mesh node locations
-  allocate(xstore(NGLOB_AB), &
-           ystore(NGLOB_AB), &
-           zstore(NGLOB_AB),stat=ier)
+  allocate(xstore(NGLOB_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2410')
+  allocate(ystore(NGLOB_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2411')
+  allocate(zstore(NGLOB_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2412')
   if (ier /= 0) stop 'error allocating arrays for mesh nodes'
 
   ! material properties
-  allocate(kappastore(NGLLX,NGLLY,NGLLZ,NSPEC_AB), &
-           mustore(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  allocate(kappastore(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2413')
+  allocate(mustore(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2414')
   if (ier /= 0) stop 'error allocating arrays for material properties'
 
   ! material flags
-  allocate(ispec_is_acoustic(NSPEC_AB), &
-           ispec_is_elastic(NSPEC_AB), &
-           ispec_is_poroelastic(NSPEC_AB),stat=ier)
+  allocate(ispec_is_acoustic(NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2415')
+  allocate(ispec_is_elastic(NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2416')
+  allocate(ispec_is_poroelastic(NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2417')
   if (ier /= 0) stop 'error allocating arrays for material flags'
   ispec_is_acoustic(:) = .false.
   ispec_is_elastic(:) = .false.
@@ -272,17 +327,12 @@
     call exit_mpi(myrank,'SIMULATION_TYPE can only be 1, 2, or 3')
 
   ! gravity only on GPU supported
-  if (.not. GPU_MODE .and. GRAVITY) &
-    stop 'GRAVITY only supported in GPU mode'
+  if (.not. GPU_MODE .and. GRAVITY) stop 'GRAVITY only supported in GPU mode'
+
+  if (NGLLX /= NGLLY .or. NGLLY /= NGLLZ) stop 'Methods that can handle unstructured meshes require NGLLX = NGLLY = NGLLZ'
 
   ! absorbing surfaces
   if (STACEY_ABSORBING_CONDITIONS) then
-    ! for arbitrary orientation of elements, which face belongs to xmin,xmax,etc... -
-    ! does it makes sense to have different NGLLX,NGLLY,NGLLZ?
-    ! there is a problem with absorbing boundaries for faces with different NGLLX,NGLLY,NGLLZ values
-    ! just to be sure for now..
-    if (NGLLX /= NGLLY .and. NGLLY /= NGLLZ) &
-      stop 'STACEY_ABSORBING_CONDITIONS must have NGLLX = NGLLY = NGLLZ'
     if (PML_CONDITIONS) then
       print *, 'please modify Par_file and recompile solver'
       stop 'STACEY_ABSORBING_CONDITIONS and PML_CONDITIONS are both set to .true.'
@@ -363,6 +413,19 @@
     close(IOUT,status='delete')
   endif
 
+  ! safety check
+  if (NB_RUNS_ACOUSTIC_GPU > 1) then
+
+   if (NUMBER_OF_SIMULTANEOUS_RUNS > 1) stop 'NB_RUNS_ACOUSTIC_GPU > 1 not compatible with NUMBER_OF_SIMULTANEOUS_RUNS > 1 yet'
+   if (SIMULATION_TYPE /= 1) stop 'NB_RUNS_ACOUSTIC_GPU > 1 not compatible with SIMULATION_TYPE /= 1 yet'
+   if (STACEY_ABSORBING_CONDITIONS) stop 'NB_RUNS_ACOUSTIC_GPU > 1 not compatible with STACEY_ABSORBING_CONDITIONS yet'
+   if (.not. SAVE_SEISMOGRAMS_PRESSURE ) stop 'NB_RUNS_ACOUSTIC_GPU > 1 not compatible with elastic wavefield seismograms yet'
+   if (.not. GPU_MODE ) stop 'NB_RUNS_ACOUSTIC_GPU > 1 only applies with GPU_MODE'
+   if (INVERSE_FWI_FULL_PROBLEM) stop 'NB_RUNS_ACOUSTIC_GPU > 1 not compatible with INVERSE_FWI_FULL_PROBLEM yet'
+   if (myrank == 1) stop 'NB_RUNS_ACOUSTIC_GPU > 1 not compatible with MPI mode yet'
+
+  endif
+
   end subroutine initialize_simulation_check
 
 !
@@ -440,9 +503,6 @@
     write(IMAIN,*) "GPU_MODE Active."
     call flush_IMAIN()
   endif
-
-  ! check for GPU runs
-  if (NGLLX /= 5 .or. NGLLY /= 5 .or. NGLLZ /= 5) stop 'GPU mode can only be used if NGLLX == NGLLY == NGLLZ == 5'
 
   if (CUSTOM_REAL /= 4) stop 'GPU mode runs only with CUSTOM_REAL == 4'
 

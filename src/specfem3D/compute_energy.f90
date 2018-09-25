@@ -39,7 +39,7 @@
   implicit none
 
 ! local variables
-  integer :: i,j,k,l,ispec,iglob
+  integer :: i,j,k,l,ispec,iglob,ispec_irreg
 
   real(kind=CUSTOM_REAL) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl,jacobianl
   real(kind=CUSTOM_REAL) :: duxdxl,duxdyl,duxdzl,duydxl,duydyl,duydzl,duzdxl,duzdyl,duzdzl
@@ -56,7 +56,7 @@
   real(kind=CUSTOM_REAL) :: lambdal,mul,lambdalplus2mul,rhol,rho_invl
   real(kind=CUSTOM_REAL) :: kappal
 
-  real(kind=CUSTOM_REAL) :: integration_weight
+  double precision :: integration_weight
   double precision :: kinetic_energy,potential_energy
   double precision :: kinetic_energy_glob,potential_energy_glob,total_energy_glob
 
@@ -90,6 +90,8 @@
 ! if element is a CPML then do not compute energy in it, since it is non physical;
 ! thus, we compute energy in the main domain only, without absorbing elements
     if (is_CPML(ispec)) cycle
+
+    ispec_irreg = irregular_element_number(ispec)
 
     !---
     !--- elastic spectral element
@@ -143,29 +145,48 @@
               tempz3(i,j,k) = tempz3(i,j,k) + dummyz_loc(i,j,l)*hp3
             enddo
 
-            ! get derivatives of ux, uy and uz with respect to x, y and z
-            xixl = xix(i,j,k,ispec)
-            xiyl = xiy(i,j,k,ispec)
-            xizl = xiz(i,j,k,ispec)
-            etaxl = etax(i,j,k,ispec)
-            etayl = etay(i,j,k,ispec)
-            etazl = etaz(i,j,k,ispec)
-            gammaxl = gammax(i,j,k,ispec)
-            gammayl = gammay(i,j,k,ispec)
-            gammazl = gammaz(i,j,k,ispec)
-            jacobianl = jacobian(i,j,k,ispec)
+            if (ispec_irreg /= 0 ) then !irregular element
 
-            duxdxl = xixl*tempx1(i,j,k) + etaxl*tempx2(i,j,k) + gammaxl*tempx3(i,j,k)
-            duxdyl = xiyl*tempx1(i,j,k) + etayl*tempx2(i,j,k) + gammayl*tempx3(i,j,k)
-            duxdzl = xizl*tempx1(i,j,k) + etazl*tempx2(i,j,k) + gammazl*tempx3(i,j,k)
+              ! get derivatives of ux, uy and uz with respect to x, y and z
+              xixl = xix(i,j,k,ispec_irreg)
+              xiyl = xiy(i,j,k,ispec_irreg)
+              xizl = xiz(i,j,k,ispec_irreg)
+              etaxl = etax(i,j,k,ispec_irreg)
+              etayl = etay(i,j,k,ispec_irreg)
+              etazl = etaz(i,j,k,ispec_irreg)
+              gammaxl = gammax(i,j,k,ispec_irreg)
+              gammayl = gammay(i,j,k,ispec_irreg)
+              gammazl = gammaz(i,j,k,ispec_irreg)
 
-            duydxl = xixl*tempy1(i,j,k) + etaxl*tempy2(i,j,k) + gammaxl*tempy3(i,j,k)
-            duydyl = xiyl*tempy1(i,j,k) + etayl*tempy2(i,j,k) + gammayl*tempy3(i,j,k)
-            duydzl = xizl*tempy1(i,j,k) + etazl*tempy2(i,j,k) + gammazl*tempy3(i,j,k)
+              duxdxl = xixl*tempx1(i,j,k) + etaxl*tempx2(i,j,k) + gammaxl*tempx3(i,j,k)
+              duxdyl = xiyl*tempx1(i,j,k) + etayl*tempx2(i,j,k) + gammayl*tempx3(i,j,k)
+              duxdzl = xizl*tempx1(i,j,k) + etazl*tempx2(i,j,k) + gammazl*tempx3(i,j,k)
 
-            duzdxl = xixl*tempz1(i,j,k) + etaxl*tempz2(i,j,k) + gammaxl*tempz3(i,j,k)
-            duzdyl = xiyl*tempz1(i,j,k) + etayl*tempz2(i,j,k) + gammayl*tempz3(i,j,k)
-            duzdzl = xizl*tempz1(i,j,k) + etazl*tempz2(i,j,k) + gammazl*tempz3(i,j,k)
+              duydxl = xixl*tempy1(i,j,k) + etaxl*tempy2(i,j,k) + gammaxl*tempy3(i,j,k)
+              duydyl = xiyl*tempy1(i,j,k) + etayl*tempy2(i,j,k) + gammayl*tempy3(i,j,k)
+              duydzl = xizl*tempy1(i,j,k) + etazl*tempy2(i,j,k) + gammazl*tempy3(i,j,k)
+
+              duzdxl = xixl*tempz1(i,j,k) + etaxl*tempz2(i,j,k) + gammaxl*tempz3(i,j,k)
+              duzdyl = xiyl*tempz1(i,j,k) + etayl*tempz2(i,j,k) + gammayl*tempz3(i,j,k)
+              duzdzl = xizl*tempz1(i,j,k) + etazl*tempz2(i,j,k) + gammazl*tempz3(i,j,k)
+
+            else ! regular element
+
+              duxdxl = xix_regular*tempx1(i,j,k)
+              duxdyl = xix_regular*tempx2(i,j,k)
+              duxdzl = xix_regular*tempx3(i,j,k)
+
+              duydxl = xix_regular*tempy1(i,j,k)
+              duydyl = xix_regular*tempy2(i,j,k)
+              duydzl = xix_regular*tempy3(i,j,k)
+
+              duzdxl = xix_regular*tempz1(i,j,k)
+              duzdyl = xix_regular*tempz2(i,j,k)
+              duzdzl = xix_regular*tempz3(i,j,k)
+
+              jacobianl = jacobian_regular
+
+            endif
 
             ! precompute some sums to save CPU time
             duxdxl_plus_duydyl = duxdxl + duydyl
@@ -187,86 +208,84 @@
             mul = mustore(i,j,k,ispec)
             rhol = rhostore(i,j,k,ispec)
 
-          ! use unrelaxed parameters if attenuation
-          if (ATTENUATION) then
-            mul  = mul * one_minus_sum_beta(i,j,k,ispec)
-            kappal = kappal * one_minus_sum_beta_kappa(i,j,k,ispec)
-          endif
+            ! full anisotropic case, stress calculations
+            if (ANISOTROPY) then
+              c11 = c11store(i,j,k,ispec)
+              c12 = c12store(i,j,k,ispec)
+              c13 = c13store(i,j,k,ispec)
+              c14 = c14store(i,j,k,ispec)
+              c15 = c15store(i,j,k,ispec)
+              c16 = c16store(i,j,k,ispec)
+              c22 = c22store(i,j,k,ispec)
+              c23 = c23store(i,j,k,ispec)
+              c24 = c24store(i,j,k,ispec)
+              c25 = c25store(i,j,k,ispec)
+              c26 = c26store(i,j,k,ispec)
+              c33 = c33store(i,j,k,ispec)
+              c34 = c34store(i,j,k,ispec)
+              c35 = c35store(i,j,k,ispec)
+              c36 = c36store(i,j,k,ispec)
+              c44 = c44store(i,j,k,ispec)
+              c45 = c45store(i,j,k,ispec)
+              c46 = c46store(i,j,k,ispec)
+              c55 = c55store(i,j,k,ispec)
+              c56 = c56store(i,j,k,ispec)
+              c66 = c66store(i,j,k,ispec)
 
-          ! full anisotropic case, stress calculations
-          if (ANISOTROPY) then
-            c11 = c11store(i,j,k,ispec)
-            c12 = c12store(i,j,k,ispec)
-            c13 = c13store(i,j,k,ispec)
-            c14 = c14store(i,j,k,ispec)
-            c15 = c15store(i,j,k,ispec)
-            c16 = c16store(i,j,k,ispec)
-            c22 = c22store(i,j,k,ispec)
-            c23 = c23store(i,j,k,ispec)
-            c24 = c24store(i,j,k,ispec)
-            c25 = c25store(i,j,k,ispec)
-            c26 = c26store(i,j,k,ispec)
-            c33 = c33store(i,j,k,ispec)
-            c34 = c34store(i,j,k,ispec)
-            c35 = c35store(i,j,k,ispec)
-            c36 = c36store(i,j,k,ispec)
-            c44 = c44store(i,j,k,ispec)
-            c45 = c45store(i,j,k,ispec)
-            c46 = c46store(i,j,k,ispec)
-            c55 = c55store(i,j,k,ispec)
-            c56 = c56store(i,j,k,ispec)
-            c66 = c66store(i,j,k,ispec)
+              sigma_xx = c11 * duxdxl + c16 * duxdyl_plus_duydxl + c12 * duydyl + &
+                         c15 * duzdxl_plus_duxdzl + c14 * duzdyl_plus_duydzl + c13 * duzdzl
+              sigma_yy = c12 * duxdxl + c26 * duxdyl_plus_duydxl + c22 * duydyl + &
+                         c25 * duzdxl_plus_duxdzl + c24 * duzdyl_plus_duydzl + c23 * duzdzl
+              sigma_zz = c13 * duxdxl + c36 * duxdyl_plus_duydxl + c23 * duydyl + &
+                         c35 * duzdxl_plus_duxdzl + c34 * duzdyl_plus_duydzl + c33 * duzdzl
+              sigma_xy = c16 * duxdxl + c66 * duxdyl_plus_duydxl + c26 * duydyl + &
+                         c56 * duzdxl_plus_duxdzl + c46 * duzdyl_plus_duydzl + c36 * duzdzl
+              sigma_xz = c15 * duxdxl + c56 * duxdyl_plus_duydxl + c25 * duydyl + &
+                         c55 * duzdxl_plus_duxdzl + c45 * duzdyl_plus_duydzl + c35 * duzdzl
+              sigma_yz = c14 * duxdxl + c46 * duxdyl_plus_duydxl + c24 * duydyl + &
+                         c45 * duzdxl_plus_duxdzl + c44 * duzdyl_plus_duydzl + c34 * duzdzl
 
-            sigma_xx = c11 * duxdxl + c16 * duxdyl_plus_duydxl + c12 * duydyl + &
-                       c15 * duzdxl_plus_duxdzl + c14 * duzdyl_plus_duydzl + c13 * duzdzl
-            sigma_yy = c12 * duxdxl + c26 * duxdyl_plus_duydxl + c22 * duydyl + &
-                       c25 * duzdxl_plus_duxdzl + c24 * duzdyl_plus_duydzl + c23 * duzdzl
-            sigma_zz = c13 * duxdxl + c36 * duxdyl_plus_duydxl + c23 * duydyl + &
-                       c35 * duzdxl_plus_duxdzl + c34 * duzdyl_plus_duydzl + c33 * duzdzl
-            sigma_xy = c16 * duxdxl + c66 * duxdyl_plus_duydxl + c26 * duydyl + &
-                       c56 * duzdxl_plus_duxdzl + c46 * duzdyl_plus_duydzl + c36 * duzdzl
-            sigma_xz = c15 * duxdxl + c56 * duxdyl_plus_duydxl + c25 * duydyl + &
-                       c55 * duzdxl_plus_duxdzl + c45 * duzdyl_plus_duydzl + c35 * duzdzl
-            sigma_yz = c14 * duxdxl + c46 * duxdyl_plus_duydxl + c24 * duydyl + &
-                       c45 * duzdxl_plus_duxdzl + c44 * duzdyl_plus_duydzl + c34 * duzdzl
+            else
 
-          else
+              ! isotropic case
+              lambdalplus2mul = kappal + FOUR_THIRDS * mul
+              lambdal = lambdalplus2mul - 2._CUSTOM_REAL * mul
 
-            ! isotropic case
-            lambdalplus2mul = kappal + FOUR_THIRDS * mul
-            lambdal = lambdalplus2mul - 2._CUSTOM_REAL * mul
+              ! compute stress sigma
+              sigma_xx = lambdalplus2mul * duxdxl + lambdal * duydyl_plus_duzdzl
+              sigma_yy = lambdalplus2mul * duydyl + lambdal * duxdxl_plus_duzdzl
+              sigma_zz = lambdalplus2mul * duzdzl + lambdal * duxdxl_plus_duydyl
 
-            ! compute stress sigma
-            sigma_xx = lambdalplus2mul * duxdxl + lambdal * duydyl_plus_duzdzl
-            sigma_yy = lambdalplus2mul * duydyl + lambdal * duxdxl_plus_duzdzl
-            sigma_zz = lambdalplus2mul * duzdzl + lambdal * duxdxl_plus_duydyl
+              sigma_xy = mul * duxdyl_plus_duydxl
+              sigma_xz = mul * duzdxl_plus_duxdzl
+              sigma_yz = mul * duzdyl_plus_duydzl
 
-            sigma_xy = mul * duxdyl_plus_duydxl
-            sigma_xz = mul * duzdxl_plus_duxdzl
-            sigma_yz = mul * duzdyl_plus_duydzl
+            endif ! ANISOTROPY
 
-          endif ! ANISOTROPY
-
-          ! subtract memory variables if attenuation
-          if (ATTENUATION) then
-            do i_sls = 1,N_SLS
-              R_xx_val = R_xx(i,j,k,ispec,i_sls)
-              R_yy_val = R_yy(i,j,k,ispec,i_sls)
-              sigma_xx = sigma_xx - R_xx_val
-              sigma_yy = sigma_yy - R_yy_val
-              sigma_zz = sigma_zz + R_xx_val + R_yy_val
-              sigma_xy = sigma_xy - R_xy(i,j,k,ispec,i_sls)
-              sigma_xz = sigma_xz - R_xz(i,j,k,ispec,i_sls)
-              sigma_yz = sigma_yz - R_yz(i,j,k,ispec,i_sls)
-            enddo
-          endif
+            ! subtract memory variables if attenuation
+            if (ATTENUATION) then
+              do i_sls = 1,N_SLS
+                R_xx_val = R_xx(i_sls,i,j,k,ispec)
+                R_yy_val = R_yy(i_sls,i,j,k,ispec)
+                sigma_xx = sigma_xx - R_xx_val
+                sigma_yy = sigma_yy - R_yy_val
+                sigma_zz = sigma_zz + R_xx_val + R_yy_val
+                sigma_xy = sigma_xy - R_xy(i_sls,i,j,k,ispec)
+                sigma_xz = sigma_xz - R_xz(i_sls,i,j,k,ispec)
+                sigma_yz = sigma_yz - R_yz(i_sls,i,j,k,ispec)
+              enddo
+            endif
 
             integration_weight = wxgll(i)*wygll(j)*wzgll(k)*jacobianl
 
+            ! velocity
+            vx = veloc(1,iglob)
+            vy = veloc(2,iglob)
+            vz = veloc(3,iglob)
+
             ! compute kinetic energy  1/2 rho ||v||^2
             ! we will divide the total sum by 2 only once, at the end of this routine, to reduce compute time
-            kinetic_energy = kinetic_energy + integration_weight * rhol*(veloc(1,iglob)**2 + &
-                                 veloc(2,iglob)**2 + veloc(3,iglob)**2)
+            kinetic_energy = kinetic_energy + integration_weight * rhol*(vx**2 + vy**2 + vz**2)
 
             ! compute potential energy 1/2 sigma_ij epsilon_ij
             ! we will divide the total sum by 2 only once, at the end of this routine, to reduce compute time
@@ -325,21 +344,48 @@
               tempx3(i,j,k) = tempx3(i,j,k) + dummyx_loc(i,j,l)*hp3
             enddo
 
-            ! get derivatives of ux, uy and uz with respect to x, y and z
-            xixl = xix(i,j,k,ispec)
-            xiyl = xiy(i,j,k,ispec)
-            xizl = xiz(i,j,k,ispec)
-            etaxl = etax(i,j,k,ispec)
-            etayl = etay(i,j,k,ispec)
-            etazl = etaz(i,j,k,ispec)
-            gammaxl = gammax(i,j,k,ispec)
-            gammayl = gammay(i,j,k,ispec)
-            gammazl = gammaz(i,j,k,ispec)
-            jacobianl = jacobian(i,j,k,ispec)
+            if (ispec_irreg /= 0 ) then !irregular element
 
-            duxdxl = xixl*tempx1(i,j,k) + etaxl*tempx2(i,j,k) + gammaxl*tempx3(i,j,k)
-            duxdyl = xiyl*tempx1(i,j,k) + etayl*tempx2(i,j,k) + gammayl*tempx3(i,j,k)
-            duxdzl = xizl*tempx1(i,j,k) + etazl*tempx2(i,j,k) + gammazl*tempx3(i,j,k)
+              ! get derivatives of ux, uy and uz with respect to x, y and z
+              xixl = xix(i,j,k,ispec_irreg)
+              xiyl = xiy(i,j,k,ispec_irreg)
+              xizl = xiz(i,j,k,ispec_irreg)
+              etaxl = etax(i,j,k,ispec_irreg)
+              etayl = etay(i,j,k,ispec_irreg)
+              etazl = etaz(i,j,k,ispec_irreg)
+              gammaxl = gammax(i,j,k,ispec_irreg)
+              gammayl = gammay(i,j,k,ispec_irreg)
+              gammazl = gammaz(i,j,k,ispec_irreg)
+
+              duxdxl = xixl*tempx1(i,j,k) + etaxl*tempx2(i,j,k) + gammaxl*tempx3(i,j,k)
+              duxdyl = xiyl*tempx1(i,j,k) + etayl*tempx2(i,j,k) + gammayl*tempx3(i,j,k)
+              duxdzl = xizl*tempx1(i,j,k) + etazl*tempx2(i,j,k) + gammazl*tempx3(i,j,k)
+
+              duydxl = xixl*tempy1(i,j,k) + etaxl*tempy2(i,j,k) + gammaxl*tempy3(i,j,k)
+              duydyl = xiyl*tempy1(i,j,k) + etayl*tempy2(i,j,k) + gammayl*tempy3(i,j,k)
+              duydzl = xizl*tempy1(i,j,k) + etazl*tempy2(i,j,k) + gammazl*tempy3(i,j,k)
+
+              duzdxl = xixl*tempz1(i,j,k) + etaxl*tempz2(i,j,k) + gammaxl*tempz3(i,j,k)
+              duzdyl = xiyl*tempz1(i,j,k) + etayl*tempz2(i,j,k) + gammayl*tempz3(i,j,k)
+              duzdzl = xizl*tempz1(i,j,k) + etazl*tempz2(i,j,k) + gammazl*tempz3(i,j,k)
+
+            else ! regular element
+
+              duxdxl = xix_regular*tempx1(i,j,k)
+              duxdyl = xix_regular*tempx2(i,j,k)
+              duxdzl = xix_regular*tempx3(i,j,k)
+
+              duydxl = xix_regular*tempy1(i,j,k)
+              duydyl = xix_regular*tempy2(i,j,k)
+              duydzl = xix_regular*tempy3(i,j,k)
+
+              duzdxl = xix_regular*tempz1(i,j,k)
+              duzdyl = xix_regular*tempz2(i,j,k)
+              duzdzl = xix_regular*tempz3(i,j,k)
+
+              jacobianl = jacobian_regular
+
+            endif
 
             rhol = rhostore(i,j,k,ispec)
             rho_invl = 1._CUSTOM_REAL / rhol

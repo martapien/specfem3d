@@ -74,7 +74,7 @@
   integer ilat, ilon, ispec, iz, i, j, k, nspec, ia, izshift, index_mat
   integer ispec2Dxmin, ispec2Dxmax, ispec2Dymin, ispec2Dymax, ispec2Dzmin, ispec2Dzmax
   integer ilayer_current, ilayer
-  integer nlat_dsm, nlon_dsm
+  integer nlat_dsm, nlon_dsm, ier
 
   integer iaddx(NGNOD), iaddy(NGNOD), iaddz(NGNOD)
 
@@ -215,15 +215,25 @@
   nspec    = nel_lat * nel_lon * nel_depth
   npointot = 8 * nspec
 
-  allocate(xp(npointot), yp(npointot), zp(npointot))
-  allocate(iglob(npointot), loc(npointot))
-  allocate(ifseg(npointot))
-  allocate(ProfForGemini(0:NZ-1,3))
-  allocate(current_layer(0:NZ-1))
-  allocate(inum_loc(2,2,2,nspec))
-  allocate(xgrid(2,2,2,nspec), ygrid(2,2,2,nspec), zgrid(2,2,2,nspec))
-  allocate(lon_zmin(nlon_dsm,nlat_dsm), lat_zmin(nlon_dsm,nlat_dsm))
-  allocate(iboun(6,nspec)) ! boundary locator
+  allocate(xp(npointot), yp(npointot), zp(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1284')
+  allocate(iglob(npointot), loc(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1285')
+  allocate(ifseg(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1286')
+  allocate(ProfForGemini(0:NZ-1,3),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1287')
+  allocate(current_layer(0:NZ-1),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1288')
+  allocate(inum_loc(2,2,2,nspec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1289')
+  allocate(xgrid(2,2,2,nspec), ygrid(2,2,2,nspec), zgrid(2,2,2,nspec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1290')
+  allocate(lon_zmin(nlon_dsm,nlat_dsm), lat_zmin(nlon_dsm,nlat_dsm),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1291')
+! boundary locator
+  allocate(iboun(6,nspec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1292')
 
   iboun(:,:) = .false.
 
@@ -338,8 +348,9 @@
 !
 !--- call ReadIasp91(vpv,vsv,density,zlayer,nlayer)
 !
-  call Read_dsm_nlayer(model1D_file, nlayer)
-  allocate(zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4))
+  ! MPC review commented out as in new version not there
+  ! call Read_dsm_nlayer(model1D_file, nlayer)
+  ! allocate(zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4))
   call Read_dsm_model(model1D_file,vpv,vsv,density,zlayer,nlayer)
 
 !
@@ -417,7 +428,8 @@
 !
 
   ilayer    = 0
-  index_mat = 1
+  ! MPC review this is =0 in the new version -- why?! used to be =1
+  index_mat = 0
 
   do iz = 0, nel_depth - 1
 
@@ -425,20 +437,21 @@
 
      if (iz /= 0) then
         if (current_layer(iz-1) /= current_layer(iz)) then
+! MPC review the next three were commented out and the fictitious save was not (same after the else below)
            izshift   = izshift + 1 ! point is repeated on the interface for DSM
-!!$           index_mat = index_mat - 1
-!!$           write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
-!!$                '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
+           index_mat = index_mat - 1
+           write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
+                '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
            !! fictious hardecoded material, not used but just for to have input file
            !! because genereate_databases will read it anyway.
-           write(86, '(2i6,5f15.5,i6)') 2, 1, 2.9, 5.8, 3.6  ,9999.,9999.,0
+           !write(86, '(2i6,5f15.5,i6)') 2, 1, 2.9, 5.8, 3.6  ,9999.,9999.,0
         endif
 
      else
 !       We write the first material
-!!$        index_mat = index_mat - 1
-!!$        write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
-!!$             '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
+        index_mat = index_mat - 1
+        write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
+             '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
      endif
 
      do ilat=0,nel_lat-1
@@ -651,6 +664,7 @@
   call write_stzmin(lon_zmin,lat_zmin,nlon_dsm,nlat_dsm,MESH)
   !
 
+! MPC review what is this save here?
   z_top = maxval(zgrid(:,:,:,:))
   zgrid(:,:,:,:) = zgrid(:,:,:,:) -  z_top
   !z_bottom = minval(zgrid(:,:,:,:))
@@ -666,8 +680,8 @@
      write(88,'(4f20.10)') vsv(i,:)
      write(88,'(4f20.10)') density(i,:)
   enddo
-!!$  write(88,*)  z_bottom
-!!$  write(88,*)  lon_center_chunk,  lat_center_chunk,  chunk_azi
+  write(88,*)  z_bottom
+  write(88,*)  lon_center_chunk,  lat_center_chunk,  chunk_azi
   close(88)
 
   !---------------- NUMEROTATION DES POINTS DE LA GRILLE ----
@@ -695,7 +709,8 @@
   call getglob_for_chunk(nspec,xp,yp,zp,iglob,loc,ifseg,nglob,npointot,NGNOD,UTM_X_MIN,UTM_X_MAX)
 
   deallocate(xp,yp,zp)
-  allocate(xp(nglob),yp(nglob),zp(nglob))
+  allocate(xp(nglob),yp(nglob),zp(nglob),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1293')
 
   ! on ne stocke que les points de la grille et leur numeros
   do ispec=1,nspec
@@ -890,7 +905,7 @@
   double precision, allocatable :: lon_zmin(:,:), lat_zmin(:,:)
   double precision, dimension(:,:), allocatable :: ProfForGemini
 
-  integer ::  istore_for_new_outputs
+  integer ::  istore_for_new_outputs, ier
   integer ::   updown(NGLLZ)
   double precision , dimension(NGLLX,NGLLY,NGLLZ) ::  longitud, latitud, radius
 
@@ -995,15 +1010,25 @@
   nspec    = nel_lat * nel_lon * nel_depth
   npointot = 27 * nspec
 
-  allocate(xp(npointot), yp(npointot), zp(npointot))
-  allocate(iglob(npointot), loc(npointot))
-  allocate(ifseg(npointot))
-  allocate(ProfForGemini(0:NZ-1,3))
-  allocate(current_layer(0:NZ-1))
-  allocate(inum_loc(3,3,3,nspec))
-  allocate(xgrid(3,3,3,nspec), ygrid(3,3,3,nspec), zgrid(3,3,3,nspec))
-  allocate(lon_zmin(nlon_dsm,nlat_dsm), lat_zmin(nlon_dsm,nlat_dsm))
-  allocate(iboun(6,nspec)) ! boundary locator
+  allocate(xp(npointot), yp(npointot), zp(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1294')
+  allocate(iglob(npointot), loc(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1295')
+  allocate(ifseg(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1296')
+  allocate(ProfForGemini(0:NZ-1,3),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1297')
+  allocate(current_layer(0:NZ-1),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1298')
+  allocate(inum_loc(3,3,3,nspec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1299')
+  allocate(xgrid(3,3,3,nspec), ygrid(3,3,3,nspec), zgrid(3,3,3,nspec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1300')
+  allocate(lon_zmin(nlon_dsm,nlat_dsm), lat_zmin(nlon_dsm,nlat_dsm),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1301')
+! boundary locator
+  allocate(iboun(6,nspec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1302')
 
   iboun(:,:) = .false.
 
@@ -1204,8 +1229,9 @@
 !
 !--- call ReadIasp91(vpv,vsv,density,zlayer,nlayer)
 !
-  call Read_dsm_nlayer(model1D_file, nlayer)
-  allocate(zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4))
+  ! MPC review why do we not read_dsm_nlayer?
+  !call Read_dsm_nlayer(model1D_file, nlayer)
+  !allocate(zlayer(nlayer), vpv(nlayer,4), vsv(nlayer,4), density(nlayer,4))
   call Read_dsm_model(model1D_file,vpv,vsv,density,zlayer,nlayer)
 
 !
@@ -1279,8 +1305,9 @@
 !-- Loop on the grid of the spectral elements
 !
 
+  ! MPC review index mat = 0 or = 1 ?
   ilayer    = 0
-  index_mat = 1
+  index_mat = 0
 
   do iz = 0, nel_depth - 1
 
@@ -1289,17 +1316,17 @@
      if (iz /= 0) then
         if (current_layer(iz-1) /= current_layer(iz)) then
            izshift   = izshift + 1 ! point is repeated on the interface for DSM
-           !index_mat = index_mat - 1
-!!$           write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
-!!$                '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
-           write(86, '(2i6,5f15.5,i6)') 2, 1, 2.9, 5.8, 3.6, 9999., 9999.,0
+           index_mat = index_mat - 1
+           write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
+                '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
+           !write(86, '(2i6,5f15.5,i6)') 2, 1, 2.9, 5.8, 3.6, 9999., 9999.,0
         endif
 
      else
 !       We write the first material
-!!$        index_mat = index_mat - 1
-!!$        write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
-!!$             '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
+        index_mat = index_mat - 1
+        write(86,'(a1,2x,i10,2x,a10,2x,a7,2x,a20,2x,a1)') &
+             '2', index_mat, 'tomography', 'elastic', 'tomography_model.xyz', '1'
      endif
 
      do ilat=0,nel_lat-1
@@ -1541,8 +1568,8 @@
      write(88,'(4f20.10)') vsv(i,:)
      write(88,'(4f20.10)') density(i,:)
   enddo
-  !write(88,*)  z_bottom
-  !write(88,*)  lon_center_chunk,  lat_center_chunk,  chunk_azi
+  write(88,*)  z_bottom
+  write(88,*)  lon_center_chunk,  lat_center_chunk,  chunk_azi
   close(88)
 
   !---------------- NUMEROTATION DES POINTS DE LA GRILLE ----
@@ -1571,7 +1598,8 @@
   call getglob_for_chunk(nspec,xp,yp,zp,iglob,loc,ifseg,nglob,npointot,NGNOD,UTM_X_MIN,UTM_X_MAX)
 
   deallocate(xp,yp,zp)
-  allocate(xp(nglob),yp(nglob),zp(nglob))
+  allocate(xp(nglob),yp(nglob),zp(nglob),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1303')
 
 !! MODIF HEX27 LA -----------------------------
 
@@ -1731,6 +1759,8 @@
 
 !=======================================================================================================!
 
+
+! MPC why is this commented out? review
 !   subroutine earth_chunk_ReadIasp91(vp,vs,rho,rb,n)
 !
 !   implicit none
@@ -1796,6 +1826,7 @@
 !
 !   end subroutine earth_chunk_ReadIasp91
 
+
 !
 !===========================================================================
 !
@@ -1843,32 +1874,11 @@
   close(iunit)
 
   end subroutine Read_dsm_model
-  !
-  !===========================================================================
-  !
 
-  subroutine Read_dsm_nlayer(model_file, n)
-
-  implicit none
-
-  integer, intent(inout) :: n
-  integer :: nzone, iunit
-  character(len=250) model_file
-
-  iunit = 26
-
-  open(unit=iunit,file=trim(model_file),status='old',action='read')
-
-  read(iunit,*) nzone
-  close(iunit)
-
-  n = nzone + 1
-  end subroutine Read_dsm_nlayer
-
+! MPC removed read_dsm_nlayer
 !
 !=======================================================================================================
 !
-
 ! compute the Euler angles and the associated rotation matrix
 
   subroutine euler_angles(rotation_matrix,CENTER_LONGITUDE_IN_DEGREES,CENTER_LATITUDE_IN_DEGREES,GAMMA_ROTATION_AZIMUTH)
@@ -2362,12 +2372,14 @@
   double precision R_EARTH,prof
   double precision, allocatable :: z(:)
   integer, allocatable :: zindex(:),ziflag(:)
-  integer ilayer,flag
+  integer ilayer,flag,ier
   character(len=10) MESH
 
   open(27,file=trim(MESH)//'.recdepth')
-  allocate(zindex(Ndepth),ziflag(Ndepth))
-  allocate(z(Ndepth))
+  allocate(zindex(Ndepth),ziflag(Ndepth),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1304')
+  allocate(z(Ndepth),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1305')
 
   do i=1,Ndepth
      read(27,*) prof,ilayer,flag
@@ -3056,7 +3068,7 @@ end subroutine find_layer_in_axisem_model
   double precision UTM_X_MIN,UTM_X_MAX
 
   integer ispec,i,j
-  integer ieoff,ilocnum,nseg,ioff,iseg,ig
+  integer ieoff,ilocnum,nseg,ioff,iseg,ig,ier
 
   integer, dimension(:), allocatable :: ind,ninseg,iwork
   double precision, dimension(:), allocatable :: work
@@ -3070,10 +3082,14 @@ end subroutine find_layer_in_axisem_model
   write(*,*) dabs(UTM_X_MAX - UTM_X_MIN)
   write(*,*) ' SMALLVALTOL  ',SMALLVALTOL
 ! dynamically allocate arrays
-  allocate(ind(npointot))
-  allocate(ninseg(npointot))
-  allocate(iwork(npointot))
-  allocate(work(npointot))
+  allocate(ind(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1306')
+  allocate(ninseg(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1307')
+  allocate(iwork(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1308')
+  allocate(work(npointot),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1309')
 
 ! establish initial pointers (!! VM changed NGLLCUBE (as in Specfem3D Basin Version 1.1) to NGNOD !!)
   do ispec=1,nspec

@@ -27,7 +27,7 @@
 
 # I make this Makefile serial for now because I do not know how to write a clean rules.mk here with all the right dependencies
 # If someone knows how to do that then please do it (in this rules.mk file only; all the others in other directories are already OK)
-.NOTPARALLEL:
+#.NOTPARALLEL:
 
 ## compilation directories
 S := ${S_TOP}/src/inverse_problem_for_model
@@ -114,7 +114,9 @@ inverse_problem_for_model_OBJECTS = \
 ## objects from other source directories
 inverse_problem_for_model_OBJECTS += \
 	$O/specfem3D_par.spec_module.o \
+	$O/asdf_data.spec_module.o \
 	$O/assemble_MPI_vector.spec.o \
+	$O/calendar.spec.o \
 	$O/check_stability.spec.o \
 	$O/comp_source_time_function.spec.o \
 	$O/compute_add_sources_acoustic.spec.o \
@@ -141,12 +143,13 @@ inverse_problem_for_model_OBJECTS += \
 	$O/compute_gradient_in_acoustic.spec.o \
 	$O/compute_interpolated_dva.spec.o \
 	$O/compute_kernels.spec.o \
+	$O/compute_seismograms.spec.o \
 	$O/compute_stacey_acoustic.spec.o \
 	$O/compute_stacey_viscoelastic.spec.o \
 	$O/compute_stacey_poroelastic.spec.o \
 	$O/compute_energy.spec.o \
 	$O/convert_time.spec.o \
-	$O/calendar.spec.o \
+	$O/couple_with_injection.spec.o \
 	$O/create_color_image.spec.o \
 	$O/detect_mesh_surfaces.spec.o \
 	$O/fault_solver_common.spec.o \
@@ -184,6 +187,7 @@ inverse_problem_for_model_OBJECTS += \
 	$O/setup_movie_meshes.spec.o \
 	$O/setup_sources_receivers.spec.o \
 	$O/station_filter.spec.o \
+	$O/surface_or_volume_integral.spec.o \
 	$O/update_displacement_scheme.spec.o \
 	$O/update_displacement_LDDRK.spec.o \
 	$O/write_movie_output.spec.o \
@@ -194,6 +198,7 @@ inverse_problem_for_model_OBJECTS += \
 
 
 inverse_problem_for_model_SHARED_OBJECTS = \
+	$O/asdf_method_stubs.cc.o \
 	$O/shared_par.shared_module.o \
 	$O/assemble_MPI_scalar.shared.o \
 	$O/check_mesh_resolution.shared.o \
@@ -338,7 +343,18 @@ endif
 inverse_problem_for_model_OBJECTS += $(adios_inverse_problem_for_model_OBJECTS)
 inverse_problem_for_model_SHARED_OBJECTS += $(adios_inverse_problem_for_model_PREOBJECTS)
 
-## VTK
+asdf_inverse_problem_for_model_STUBS = \
+	$O/asdf_method_stubs.cc.o
+
+asdf_inverse_problem_for_model_PRESTUBS = \
+	$O/asdf_manager_stubs.shared_asdf.o
+
+ifeq ($(ASDF),no)
+asdf_inverse_problem_for_model_PREOBJECTS = $(asdf_inverse_problem_for_model_PRESTUBS)
+endif
+inverse_problem_for_model_OBJECTS += $(asdf_inverse_problem_for_model_OBJECTS)
+inverse_problem_for_model_SHARED_OBJECTS += $(asdf_inverse_problem_for_model_PREOBJECTS)
+
 ifeq ($(VTK),yes)
 inverse_problem_for_model_OBJECTS += \
 	$O/vtk_window_stubs.visualcc.o \
@@ -415,12 +431,15 @@ $O/specfem_interface_mod.inv_specfem_interface.o: \
 
 $O/regularization_interface.inv_regularization.o: $O/regularization_SEM_mod.inv_regularization.o $O/regularization_FD_mod.inv_regularization.o
 
-$O/family_parameter_mod.inv_inversion.o: $O/iso_parameters.inv_inversion.o $O/vti_parameters.inv_inversion.o
+$O/family_parameter_mod.inv_inversion.o: $O/input_output_mod.inv_input.o $O/iso_parameters.inv_inversion.o $O/vti_parameters.inv_inversion.o
 
 $O/fwi_iteration_mod.inv_inversion.o: \
+	$O/specfem_interface_mod.inv_specfem_interface.o \
 	$O/family_parameter_mod.inv_inversion.o \
 	$O/PrecondFWI_mod.inv_inversion.o \
 	$O/regularization_interface.inv_regularization.o
+
+$O/regularization_FD_mod.inv_regularization.o: $O/projection_on_FD_grid_mod.inv_projection.o
 
 $O/inverse_problem_main.inv.o: \
 	$O/elastic_tensor_tools_mod.inv.o \
@@ -432,8 +451,6 @@ $O/inverse_problem_main.inv.o: \
 	$O/specfem_interface_mod.inv_specfem_interface.o \
 	$O/fwi_iteration_mod.inv_inversion.o
 
-
-
 ####
 #### rule to build each .o file
 ####
@@ -441,7 +458,6 @@ $O/inverse_problem_main.inv.o: \
 ## main module
 $O/%.inv_par.o: $S/%.f90 ${SETUP}/constants.h $O/shared_par.shared_module.o $O/specfem3D_par.spec_module.o
 	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
-
 
 ## file object rules
 $O/%.inv.o: $S/%.f90 ${SETUP}/constants.h $O/inverse_problem_par.inv_par.o

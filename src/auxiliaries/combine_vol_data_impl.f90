@@ -25,7 +25,6 @@
 !
 !=====================================================================
 
-
 module combine_vtk_par
 
     ! global point data
@@ -37,7 +36,6 @@ module combine_vtk_par
 end module combine_vtk_par
 
 !=============================================================================
-
 
 module combine_vol_data_mod
   implicit none

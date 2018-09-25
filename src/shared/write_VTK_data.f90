@@ -88,7 +88,6 @@
   write(IOVTK,*) ''
   close(IOVTK)
 
-
   end subroutine write_VTK_data_elem_i
 
 !=====================================================================
@@ -159,7 +158,6 @@
   write(IOVTK,*) ''
   close(IOVTK)
 
-
   end subroutine write_VTK_data_elem_l
 
 
@@ -223,9 +221,11 @@
   write(IOVTK,*) ''
 
   ! iflag field on global nodeset
-  !allocate(mask_ibool(nglob),flag_val(nglob),stat=ier)
-  if (.not. allocated(mask_ibool)) allocate(mask_ibool(nglob),flag_val(nglob),stat=ier)
-  if (ier /= 0) stop 'error allocating mask'
+  if (.not. allocated(mask_ibool)) then
+     allocate(mask_ibool(nglob),flag_val(nglob),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 1234')
+     if (ier /= 0) stop 'error allocating mask'
+  endif
 
   mask_ibool = .false.
   do ispec=1,nspec
@@ -249,9 +249,7 @@
       write(IOVTK,*) flag_val(i)
   enddo
   write(IOVTK,*) ''
-
   close(IOVTK)
-
 
   end subroutine write_VTK_data_gll_cr
 
@@ -316,6 +314,7 @@
 
   ! iflag field on global nodeset
   allocate(mask_ibool(nglob),flag_val(nglob),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1235')
   if (ier /= 0) stop 'error allocating mask'
 
   mask_ibool = .false.
@@ -340,9 +339,7 @@
       write(IOVTK,*) flag_val(i)
   enddo
   write(IOVTK,*) ''
-
   close(IOVTK)
-
 
   end subroutine write_VTK_data_gll_i
 
@@ -396,9 +393,7 @@
     write(IOVTK,'(3e18.6)') xstore_dummy(iglob),ystore_dummy(iglob),zstore_dummy(iglob)
   enddo
   write(IOVTK,*) ''
-
   close(IOVTK)
-
 
   end subroutine write_VTK_data_points
 
@@ -463,18 +458,16 @@
   do i=1,nspec
     write(IOVTK,*) elem_vector(1,i),elem_vector(2,i),elem_vector(3,i)
   enddo
-
   write(IOVTK,*) ''
   close(IOVTK)
-
 
   end subroutine write_VTK_data_elem_vectors
 
 !=============================================================
 
   subroutine write_VTK_data_elem_cr(nspec,nglob, &
-                        xstore_dummy,ystore_dummy,zstore_dummy,ibool, &
-                        elem_flag,prname_file)
+                                    xstore_dummy,ystore_dummy,zstore_dummy,ibool, &
+                                    elem_flag,prname_file)
 
   use constants
 
@@ -507,14 +500,14 @@
   write(IOVTK,'(a)') 'ASCII'
   write(IOVTK,'(a)') 'DATASET UNSTRUCTURED_GRID'
   write(IOVTK, '(a,i12,a)') 'POINTS ', nglob, ' float'
-  do i=1,nglob
+  do i = 1,nglob
     write(IOVTK,'(3e18.6)') xstore_dummy(i),ystore_dummy(i),zstore_dummy(i)
   enddo
   write(IOVTK,*) ''
 
   ! note: indices for vtk start at 0
   write(IOVTK,'(a,i12,i12)') "CELLS ",nspec,nspec*9
-  do ispec=1,nspec
+  do ispec = 1,nspec
     write(IOVTK,'(9i12)') 8,ibool(1,1,1,ispec)-1,ibool(NGLLX,1,1,ispec)-1,ibool(NGLLX,NGLLY,1,ispec)-1,ibool(1,NGLLY,1,ispec)-1, &
           ibool(1,1,NGLLZ,ispec)-1,ibool(NGLLX,1,NGLLZ,ispec)-1,ibool(NGLLX,NGLLY,NGLLZ,ispec)-1,ibool(1,NGLLY,NGLLZ,ispec)-1
   enddo
@@ -533,6 +526,5 @@
   enddo
   write(IOVTK,*) ''
   close(IOVTK)
-
 
   end subroutine write_VTK_data_elem_cr

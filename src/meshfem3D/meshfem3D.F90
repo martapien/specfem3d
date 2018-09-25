@@ -387,20 +387,27 @@
 
   ! dynamic allocation of mesh arrays
   allocate(rns(0:2*NER),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1352')
   if (ier /= 0) stop 'Error allocating array rns'
 
   allocate(xgrid(0:2*NER,0:2*NEX_PER_PROC_XI,0:2*NEX_PER_PROC_ETA),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1353')
   if (ier /= 0) stop 'Error allocating array xgrid'
   allocate(ygrid(0:2*NER,0:2*NEX_PER_PROC_XI,0:2*NEX_PER_PROC_ETA),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1354')
   if (ier /= 0) stop 'Error allocating array ygrid'
   allocate(zgrid(0:2*NER,0:2*NEX_PER_PROC_XI,0:2*NEX_PER_PROC_ETA),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1355')
   if (ier /= 0) call exit_MPI(myrank,'not enough memory to allocate arrays')
 
   allocate(addressing(0:NPROC_XI-1,0:NPROC_ETA-1),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1356')
   if (ier /= 0) stop 'Error allocating array addressing'
   allocate(iproc_xi_slice(0:NPROC-1),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1357')
   if (ier /= 0) stop 'Error allocating array iproc_xi_slice'
   allocate(iproc_eta_slice(0:NPROC-1),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1358')
   if (ier /= 0) stop 'Error allocating array iproc_eta_slice'
 
   ! clear arrays
@@ -470,9 +477,6 @@
 
   ! check that reals are either 4 or 8 bytes
   if (CUSTOM_REAL /= SIZE_REAL .and. CUSTOM_REAL /= SIZE_DOUBLE) call exit_MPI(myrank,'wrong size of CUSTOM_REAL for reals')
-
-  ! for the number of standard linear solids for attenuation
-  if (N_SLS /= 3) call exit_MPI(myrank,'number of SLS must be 3')
 
   ! check that number of slices is at least 1 in each direction
   if (NPROC_XI < 1) call exit_MPI(myrank,'NPROC_XI must be greater than 1')
@@ -548,9 +552,6 @@
   npx_element_steps = 2*NEX_PER_PROC_XI
   npy_element_steps = 2*NEX_PER_PROC_ETA
   ner_layer(:) = 2 * ner_layer(:)
-
-  !min_elevation = +HUGEVAL
-  !max_elevation = -HUGEVAL
 
   ! user output
   if (myrank == 0) then

@@ -81,19 +81,15 @@ subroutine BC_KINFLT_init(prname,DTglobal,myrank)
 
   open(unit=IIN_PAR,file=IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//'Par_file_faults',status='old',iostat=ier)
   if (ier /= 0) then
-    if (myrank == 0) write(IMAIN,*) 'no kinematic faults'
+    if (myrank == 0) write(IMAIN,*) '  no kinematic faults'
     close(IIN_PAR)
     return
   endif
 
   read(IIN_PAR,*) nbfaults
   if (nbfaults == 0) then
-    if (myrank == 0) write(IMAIN,*) 'No faults found in file DATA/Par_file_faults'
+    !if (myrank == 0) write(IMAIN,*) 'No faults found in file DATA/Par_file_faults'
     return
-  else if (nbfaults == 1) then
-    if (myrank == 0) write(IMAIN,*) 'There is 1 fault in file DATA/Par_file_faults'
-  else
-    if (myrank == 0) write(IMAIN,*) 'There are ', nbfaults, ' faults in file DATA/Par_file_faults'
   endif
 
   filename = prname(1:len_trim(prname))//'fault_db.bin'
@@ -106,28 +102,47 @@ subroutine BC_KINFLT_init(prname,DTglobal,myrank)
 
   read(IIN_PAR,*)  ! eta
   read(IIN_PAR,*) SIMULATION_TYPE
-  if (SIMULATION_TYPE == 2) then
-    SIMULATION_TYPE_KIN = .true.
-    read(IIN_PAR,*) NTOUT
-    read(IIN_PAR,*) NSNAP
-    read(IIN_PAR,*) DUMMY
-    read(IIN_PAR,*) DUMMY
-    read(IIN_BIN) nbfaults ! should be the same as in IIN_PAR
-    allocate( faults(nbfaults) )
-    dt = real(DTglobal)
-    do iflt=1,nbfaults
-      read(IIN_PAR,nml=BEGIN_FAULT,end=100)
-      call init_one_fault(faults(iflt),IIN_BIN,IIN_PAR,dt,nt,iflt)
-    enddo
+
+  ! fault simulation type == 2 for kinematic rupture simulation
+  ! checks if anything to do
+  if (SIMULATION_TYPE /= 2) then
+    close(IIN_BIN)
+    close(IIN_PAR)
+    return
   endif
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) 'incorporating kinematic rupture simulation'
+    write(IMAIN,*) '  found ', nbfaults, ' fault(s) in file DATA/Par_file_faults'
+  endif
+
+  SIMULATION_TYPE_KIN = .true.
+
+  read(IIN_PAR,*) NTOUT
+  read(IIN_PAR,*) NSNAP
+  read(IIN_PAR,*) DUMMY
+  read(IIN_PAR,*) DUMMY
+
+  read(IIN_BIN) nbfaults ! should be the same as in IIN_PAR
+  allocate( faults(nbfaults) ,stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1993')
+  dt = real(DTglobal)
+  do iflt=1,nbfaults
+    read(IIN_PAR,nml=BEGIN_FAULT,end=100)
+    call init_one_fault(faults(iflt),IIN_BIN,IIN_PAR,dt,nt,iflt)
+  enddo
+
   close(IIN_BIN)
   close(IIN_PAR)
 
   return
 
-100 if (myrank == 0) write(IMAIN,*) 'Fatal error: did not find BEGIN_FAULT input block in file DATA/Par_file_faults. Abort.'
-    stop
-  ! WARNING TO DO: should be an MPI abort
+100 if (myrank == 0) then
+      write(IMAIN,*) 'Fatal error: did not find BEGIN_FAULT input block in file DATA/Par_file_faults. Abort.'
+      stop
+      ! WARNING TO DO: should be an MPI abort
+    endif
 
 end subroutine BC_KINFLT_init
 
@@ -142,15 +157,20 @@ subroutine init_one_fault(bc,IIN_BIN,IIN_PAR,dt,NT,iflt)
 
   real(kind=CUSTOM_REAL) :: kindt
 
+  integer :: ier
+
   NAMELIST / KINPAR / kindt
 
   call initialize_fault(bc,IIN_BIN)
 
   if (bc%nspec > 0) then
 
-    allocate(bc%T(3,bc%nglob))
-    allocate(bc%D(3,bc%nglob))
-    allocate(bc%V(3,bc%nglob))
+    allocate(bc%T(3,bc%nglob),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 1994')
+    allocate(bc%D(3,bc%nglob),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 1995')
+    allocate(bc%V(3,bc%nglob),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 1996')
     bc%T = 0e0_CUSTOM_REAL
     bc%D = 0e0_CUSTOM_REAL
     bc%V = 0e0_CUSTOM_REAL
@@ -162,8 +182,10 @@ subroutine init_one_fault(bc,IIN_BIN,IIN_PAR,dt,NT,iflt)
     bc%kin_it=0
     ! Always have in memory the slip-rate model at two times, t1 and t2,
     ! spatially interpolated in the spectral element grid
-    allocate(bc%v_kin_t1(2,bc%nglob))
-    allocate(bc%v_kin_t2(2,bc%nglob))
+    allocate(bc%v_kin_t1(2,bc%nglob),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 1997')
+    allocate(bc%v_kin_t2(2,bc%nglob),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 1998')
     bc%v_kin_t1 = 0e0_CUSTOM_REAL
     bc%v_kin_t2 = 0e0_CUSTOM_REAL
 
@@ -316,6 +338,8 @@ subroutine init_dataXZ(dataXZ,bc)
   type(dataXZ_type), intent(inout) :: dataXZ
   type(bc_dynandkinflt_type) :: bc
 
+  integer :: ier
+
  if (bc%nglob > 0) then
    dataXZ%d1 => bc%d(1,:)
    dataXZ%d2 => bc%d(2,:)
@@ -324,9 +348,12 @@ subroutine init_dataXZ(dataXZ,bc)
    dataXZ%t1 => bc%t(1,:)
    dataXZ%t2 => bc%t(2,:)
    dataXZ%t3 => bc%t(3,:)
-   allocate(dataXZ%xcoord(bc%nglob))
-   allocate(dataXZ%ycoord(bc%nglob))
-   allocate(dataXZ%zcoord(bc%nglob))
+   allocate(dataXZ%xcoord(bc%nglob),stat=ier)
+   if (ier /= 0) call exit_MPI_without_rank('error allocating array 1999')
+   allocate(dataXZ%ycoord(bc%nglob),stat=ier)
+   if (ier /= 0) call exit_MPI_without_rank('error allocating array 2000')
+   allocate(dataXZ%zcoord(bc%nglob),stat=ier)
+   if (ier /= 0) call exit_MPI_without_rank('error allocating array 2001')
  endif
 
 end subroutine init_dataXZ

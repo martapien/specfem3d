@@ -36,7 +36,7 @@
                         nrec_local,number_receiver_global,nsources_local,tshift_src,dt,t0,SU_FORMAT, &
                         USE_LDDRK,istage,USE_EXTERNAL_SOURCE_FILE,user_source_time_function, &
                         USE_BINARY_FOR_SEISMOGRAMS,NSPEC_AB,NGLOB_AB,ibool,NSOURCES,myrank,it,islice_selected_source, &
-                        ispec_selected_source,sourcearrays,SIMULATION_TYPE,NSTEP, &
+                        ispec_selected_source,sourcearrays,SIMULATION_TYPE,NSTEP,READ_ADJSRC_ASDF, &
                         nrec,islice_selected_rec,ispec_selected_rec,nadj_rec_local, &
                         NTSTEP_BETWEEN_READ_ADJSRC,NOISE_TOMOGRAPHY,hxir_store,hetar_store,hgammar_store,source_adjoint, &
                         INVERSE_FWI_FULL_PROBLEM
@@ -159,7 +159,7 @@
       ! this must be done carefully, otherwise the adjoint sources may be added twice
       if (ibool_read_adj_arrays .and. .not. INVERSE_FWI_FULL_PROBLEM) then
 
-        if (.not. SU_FORMAT) then
+        if (.not. (SU_FORMAT .or. READ_ADJSRC_ASDF)) then
           if (USE_BINARY_FOR_SEISMOGRAMS) stop 'Adjoint simulations not supported with .bin format, please use SU format instead'
           !!! read ascii adjoint sources
           do irec_local = 1, nrec_local
@@ -168,6 +168,14 @@
             adj_source_file = trim(network_name(irec))//'.'//trim(station_name(irec))
             call compute_arrays_adjoint_source(adj_source_file,irec_local)
           enddo
+        else if (READ_ADJSRC_ASDF) then
+          do irec_local = 1, nrec_local
+            ! reads in **net**.**sta**.**BH**.adj files
+            irec = number_receiver_global(irec_local)
+            adj_source_file = trim(network_name(irec))//'_'//trim(station_name(irec))
+            call compute_arrays_adjoint_source(adj_source_file,irec_local)
+          enddo
+          call compute_arrays_adjoint_source(adj_source_file, irec_local)
         else
            call compute_arrays_adjoint_source_SU()
         endif !if (.not. SU_FORMAT)
@@ -193,9 +201,16 @@
                   do i = 1,NGLLX
                     iglob = ibool(i,j,k,ispec_selected_rec(irec))
 
-                    accel(:,iglob) = accel(:,iglob)  &
-                              + source_adjoint(irec_local,NTSTEP_BETWEEN_READ_ADJSRC - mod(it-1,NTSTEP_BETWEEN_READ_ADJSRC),:) * &
-                                hxir_store(irec_local,i)*hetar_store(irec_local,j)*hgammar_store(irec_local,k)
+!! DK DK Aug 2018: added this because Lei Zhang may have detected a problem
+                    if (.not. allocated(hxir_store) .or. .not. allocated(hetar_store) .or. .not. allocated(hgammar_store)) then
+                      print *,'ERROR: trying to use arrays hxir_store/hetar_store/hgammar_store with irec_local = ',irec_local, &
+                              ' as first index, but these arrays are unallocated!'
+                      call exit_MPI_without_rank('ERROR: trying to use arrays hxir_store/hetar_store/hgammar_store at line 201 &
+                                  &of file src/specfem3D/compute_add_sources_viscoelastic.F90, but these arrays are unallocated!')
+                    endif
+                    accel(:,iglob) = accel(:,iglob) + &
+                            source_adjoint(:,irec_local,NTSTEP_BETWEEN_READ_ADJSRC - mod(it-1,NTSTEP_BETWEEN_READ_ADJSRC)) * &
+                            hxir_store(irec_local,i)*hetar_store(irec_local,j)*hgammar_store(irec_local,k)
                   enddo
                 enddo
               enddo
@@ -271,7 +286,7 @@
 
 ! no source inside the mesh if we are coupling with DSM
 ! because the source is precisely the wavefield coming from the DSM traction file
-  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. SIMULATION_TYPE == 1) return
+  if (COUPLE_WITH_INJECTION_TECHNIQUE .and. SIMULATION_TYPE == 3) return
 
 ! NOTE: adjoint sources and backward wavefield timing:
 !             idea is to start with the backward field b_displ,.. at time (T)

@@ -25,24 +25,23 @@
 !
 !=====================================================================
 
+
   subroutine compute_arrays_source_cmt(ispec_selected_source,sourcearray, &
-                                   hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
-                                   Mxx,Myy,Mzz,Mxy,Mxz,Myz, &
-                                   xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz,nspec)
+                                       hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
+                                       Mxx,Myy,Mzz,Mxy,Mxz,Myz)
 
   use constants
+  use specfem_par, only: xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz,xix_regular,irregular_element_number
 
   implicit none
 
-  integer :: ispec_selected_source,nspec
+  integer :: ispec_selected_source
 
   real(kind=CUSTOM_REAL), dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: sourcearray
   double precision, dimension(NGLLX) :: hxis,hpxis
   double precision, dimension(NGLLY) :: hetas,hpetas
   double precision, dimension(NGLLZ) :: hgammas,hpgammas
   double precision :: Mxx,Myy,Mzz,Mxy,Mxz,Myz
-
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec) :: xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
 
   ! local parameters
   double precision :: xixd,xiyd,xizd,etaxd,etayd,etazd,gammaxd,gammayd,gammazd
@@ -55,8 +54,9 @@
   double precision :: dxis_dx, detas_dx, dgammas_dx
   double precision :: dxis_dy, detas_dy, dgammas_dy
   double precision :: dxis_dz, detas_dz, dgammas_dz
+  double precision :: xix_reg_d
 
-  integer :: k,l,m
+  integer :: k,l,m, ispec_irreg
 
   dxis_dx = ZERO
   dxis_dy = ZERO
@@ -68,34 +68,45 @@
   dgammas_dy = ZERO
   dgammas_dz = ZERO
 
+  ispec_irreg = irregular_element_number(ispec_selected_source)
+  if (ispec_irreg == 0) xix_reg_d = dble(xix_regular)
   do m = 1,NGLLZ
      do l = 1,NGLLY
         do k = 1,NGLLX
 
-           xixd    = dble(xix(k,l,m,ispec_selected_source))
-           xiyd    = dble(xiy(k,l,m,ispec_selected_source))
-           xizd    = dble(xiz(k,l,m,ispec_selected_source))
-           etaxd   = dble(etax(k,l,m,ispec_selected_source))
-           etayd   = dble(etay(k,l,m,ispec_selected_source))
-           etazd   = dble(etaz(k,l,m,ispec_selected_source))
-           gammaxd = dble(gammax(k,l,m,ispec_selected_source))
-           gammayd = dble(gammay(k,l,m,ispec_selected_source))
-           gammazd = dble(gammaz(k,l,m,ispec_selected_source))
-
            hlagrange = hxis(k) * hetas(l) * hgammas(m)
 
-           dxis_dx = dxis_dx + hlagrange * xixd
-           dxis_dy = dxis_dy + hlagrange * xiyd
-           dxis_dz = dxis_dz + hlagrange * xizd
+           if (ispec_irreg /= 0) then !irregular element
 
-           detas_dx = detas_dx + hlagrange * etaxd
-           detas_dy = detas_dy + hlagrange * etayd
-           detas_dz = detas_dz + hlagrange * etazd
+             xixd    = dble(xix(k,l,m,ispec_irreg))
+             xiyd    = dble(xiy(k,l,m,ispec_irreg))
+             xizd    = dble(xiz(k,l,m,ispec_irreg))
+             etaxd   = dble(etax(k,l,m,ispec_irreg))
+             etayd   = dble(etay(k,l,m,ispec_irreg))
+             etazd   = dble(etaz(k,l,m,ispec_irreg))
+             gammaxd = dble(gammax(k,l,m,ispec_irreg))
+             gammayd = dble(gammay(k,l,m,ispec_irreg))
+             gammazd = dble(gammaz(k,l,m,ispec_irreg))
 
-           dgammas_dx = dgammas_dx + hlagrange * gammaxd
-           dgammas_dy = dgammas_dy + hlagrange * gammayd
-           dgammas_dz = dgammas_dz + hlagrange * gammazd
+             dxis_dx = dxis_dx + hlagrange * xixd
+             dxis_dy = dxis_dy + hlagrange * xiyd
+             dxis_dz = dxis_dz + hlagrange * xizd
 
+             detas_dx = detas_dx + hlagrange * etaxd
+             detas_dy = detas_dy + hlagrange * etayd
+             detas_dz = detas_dz + hlagrange * etazd
+
+             dgammas_dx = dgammas_dx + hlagrange * gammaxd
+             dgammas_dy = dgammas_dy + hlagrange * gammayd
+             dgammas_dz = dgammas_dz + hlagrange * gammazd
+
+           else !regular element
+
+             dxis_dx = dxis_dx + hlagrange * xix_reg_d
+             detas_dy = detas_dy + hlagrange * xix_reg_d
+             dgammas_dz = dgammas_dz + hlagrange * xix_reg_d
+
+           endif
        enddo
      enddo
   enddo
@@ -106,12 +117,17 @@
      do l = 1,NGLLY
         do k = 1,NGLLX
 
-           dsrc_dx = (hpxis(k)*dxis_dx)*hetas(l)*hgammas(m) + hxis(k)*(hpetas(l)*detas_dx)*hgammas(m) + &
-                                                                hxis(k)*hetas(l)*(hpgammas(m)*dgammas_dx)
-           dsrc_dy = (hpxis(k)*dxis_dy)*hetas(l)*hgammas(m) + hxis(k)*(hpetas(l)*detas_dy)*hgammas(m) + &
-                                                                hxis(k)*hetas(l)*(hpgammas(m)*dgammas_dy)
-           dsrc_dz = (hpxis(k)*dxis_dz)*hetas(l)*hgammas(m) + hxis(k)*(hpetas(l)*detas_dz)*hgammas(m) + &
-                                                                hxis(k)*hetas(l)*(hpgammas(m)*dgammas_dz)
+           dsrc_dx = (hpxis(k)*dxis_dx)*hetas(l)*hgammas(m) &
+                    + hxis(k)*(hpetas(l)*detas_dx)*hgammas(m) &
+                    + hxis(k)*hetas(l)*(hpgammas(m)*dgammas_dx)
+
+           dsrc_dy = (hpxis(k)*dxis_dy)*hetas(l)*hgammas(m) &
+                    + hxis(k)*(hpetas(l)*detas_dy)*hgammas(m) &
+                    + hxis(k)*hetas(l)*(hpgammas(m)*dgammas_dy)
+
+           dsrc_dz = (hpxis(k)*dxis_dz)*hetas(l)*hgammas(m) &
+                    + hxis(k)*(hpetas(l)*detas_dz)*hgammas(m) &
+                    + hxis(k)*hetas(l)*(hpgammas(m)*dgammas_dz)
 
            sourcearrayd(1,k,l,m) = sourcearrayd(1,k,l,m) + (Mxx*dsrc_dx + Mxy*dsrc_dy + Mxz*dsrc_dz)
            sourcearrayd(2,k,l,m) = sourcearrayd(2,k,l,m) + (Mxy*dsrc_dx + Myy*dsrc_dy + Myz*dsrc_dz)
@@ -126,9 +142,12 @@
 
   end subroutine compute_arrays_source_cmt
 
-! =======================================================================
+!
+!-------------------------------------------------------------------------------------------------
+!
 
 ! compute array for acoustic source
+
   subroutine compute_arrays_source_forcesolution(sourcearray,hxis,hetas,hgammas,factor_source,comp_x,comp_y,comp_z,nu_source)
 
   use constants
@@ -151,9 +170,9 @@
   sourcearray(:,:,:,:) = 0._CUSTOM_REAL
 
 ! calculates source array for interpolated location
-  do k=1,NGLLZ
-    do j=1,NGLLY
-      do i=1,NGLLX
+  do k = 1,NGLLZ
+    do j = 1,NGLLY
+      do i = 1,NGLLX
         hlagrange = hxis(i) * hetas(j) * hgammas(k) * dble(factor_source)
         ! identical source array components in x,y,z-direction
         sourcearray(:,i,j,k) =  hlagrange * ( nu_source(1,:) * comp_x + &
@@ -165,11 +184,13 @@
 
   end subroutine compute_arrays_source_forcesolution
 
-!================================================================
+!
+!-------------------------------------------------------------------------------------------------
+!
 
   subroutine compute_arrays_adjoint_source(adj_source_file,irec_local)
 
-  use specfem_par, only: myrank,source_adjoint,NSTEP,NTSTEP_BETWEEN_READ_ADJSRC,it
+  use specfem_par, only: myrank,source_adjoint,NSTEP,NTSTEP_BETWEEN_READ_ADJSRC,it,READ_ADJSRC_ASDF
 
   use constants
 
@@ -181,6 +202,8 @@
 
 ! local
   integer icomp, itime, ier, it_start, it_end, it_sub_adj
+  real(kind=CUSTOM_REAL), dimension(NDIM,NTSTEP_BETWEEN_READ_ADJSRC) :: adj_src
+  real(kind=CUSTOM_REAL), dimension(NSTEP) :: adj_source_asdf
   double precision :: junk
   ! note: should have same order as orientation in write_seismograms_to_file()
   character(len=3),dimension(NDIM) :: comp
@@ -195,43 +218,69 @@
   it_sub_adj = ceiling( dble(it)/dble(NTSTEP_BETWEEN_READ_ADJSRC) )
   it_start = NSTEP - it_sub_adj*NTSTEP_BETWEEN_READ_ADJSRC + 1
   it_end   = it_start + NTSTEP_BETWEEN_READ_ADJSRC - 1
+  adj_src(:,:) = 0._CUSTOM_REAL
+  itime=0
 
-  ! loops over components
-  do icomp = 1, NDIM
+  if (READ_ADJSRC_ASDF) then
 
-    filename = OUTPUT_FILES(1:len_trim(OUTPUT_FILES))//'/../SEM/'//trim(adj_source_file)//'.'//comp(icomp)//'.adj'
-    open(unit=IIN,file=trim(filename),status='old',action='read',iostat = ier)
-    ! cycles to next file (this might be more error prone)
-    !if (ier /= 0) cycle
-    ! requires adjoint files to exist (users will have to be more careful in setting up adjoint runs)
-    if (ier /= 0) call exit_MPI(myrank, ' file '//trim(filename)//' does not exist - required for adjoint runs')
+    do icomp = 1, NDIM ! 3 components
 
-    ! reads in adjoint source trace
-    !! skip unused blocks
-    do itime = 1, it_start-1
-      read(IIN,*,iostat=ier) junk, junk
-      if (ier /= 0) &
-        call exit_MPI(myrank, &
-          'file '//trim(filename)//' has wrong length, please check with your simulation duration (1111)')
+      filename = trim(adj_source_file) // '_' // comp(icomp)
+
+      ! would skip read and set source artificially to zero if out of bounds,
+      ! see comments above
+      if (it_start == 0 .and. itime == 0) then
+        adj_src(icomp,1) = 0._CUSTOM_REAL
+        cycle
+      endif
+
+      call read_adjoint_sources_ASDF(filename, adj_source_asdf, it_start, it_end)
+
+      adj_src(icomp,:) = real(adj_source_asdf(:))
+
     enddo
-    !! read the block we need
-    do itime = it_start, it_end
-      read(IIN,*,iostat=ier) junk, source_adjoint(irec_local,itime-it_start+1,icomp)
-      !!! used to check whether we read the correct block
-      ! if (icomp==1)      print *, junk, adj_src(itime-it_start+1,icomp)
-      if (ier /= 0) &
-        call exit_MPI(myrank, &
-          'file '//trim(filename)//' has wrong length, please check with your simulation duration (2222)')
+
+  else
+
+    ! loops over components
+    do icomp = 1, NDIM
+
+      filename = OUTPUT_FILES(1:len_trim(OUTPUT_FILES))//'/../SEM/'//trim(adj_source_file)//'.'//comp(icomp)//'.adj'
+      open(unit=IIN,file=trim(filename),status='old',action='read',iostat = ier)
+      ! cycles to next file (this might be more error prone)
+      !if (ier /= 0) cycle
+      ! requires adjoint files to exist (users will have to be more careful in setting up adjoint runs)
+      if (ier /= 0) call exit_MPI(myrank, ' file '//trim(filename)//' does not exist - required for adjoint runs')
+
+      ! reads in adjoint source trace
+      !! skip unused blocks
+      do itime = 1, it_start-1
+        read(IIN,*,iostat=ier) junk, junk
+        if (ier /= 0) &
+          call exit_MPI(myrank, &
+            'file '//trim(filename)//' has wrong length, please check with your simulation duration (1111)')
+      enddo
+      !! read the block we need
+      do itime = it_start, it_end
+        read(IIN,*,iostat=ier) junk, source_adjoint(icomp,irec_local,itime-it_start+1)
+        !!! used to check whether we read the correct block
+        ! if (icomp==1)      print *, junk, adj_src(itime-it_start+1,icomp)
+        if (ier /= 0) &
+          call exit_MPI(myrank, &
+            'file '//trim(filename)//' has wrong length, please check with your simulation duration (2222)')
+      enddo
+      close(IIN)
+
     enddo
-    close(IIN)
+  endif
 
-  enddo
+  end subroutine compute_arrays_adjoint_source
 
-end subroutine compute_arrays_adjoint_source
+!
+!-------------------------------------------------------------------------------------------------
+!
 
-!================================================================
-
-subroutine compute_arrays_adjoint_source_SU()
+  subroutine compute_arrays_adjoint_source_SU()
 
   use specfem_par, only: myrank,source_adjoint,it,NSTEP,NTSTEP_BETWEEN_READ_ADJSRC,nrec_local
   use specfem_par_acoustic, only: ACOUSTIC_SIMULATION
@@ -258,9 +307,9 @@ subroutine compute_arrays_adjoint_source_SU()
     if (ier /= 0) call exit_MPI(myrank,'file '//trim(filename)//' does not exist')
     do irec_local = 1,nrec_local
        read(IIN_SU1,pos=4*((irec_local-1)*(60+NSTEP) + 60 + it_start)+1 ) adj_temp
-       source_adjoint(irec_local,:,1) = adj_temp(:)
-       source_adjoint(irec_local,:,2) = 0.0  !TRIVIAL
-       source_adjoint(irec_local,:,3) = 0.0  !TRIVIAL
+       source_adjoint(1,irec_local,:) = adj_temp(:)
+       source_adjoint(2,irec_local,:) = 0.0  !TRIVIAL
+       source_adjoint(3,irec_local,:) = 0.0  !TRIVIAL
     enddo
     close(IIN_SU1)
 
@@ -281,11 +330,11 @@ subroutine compute_arrays_adjoint_source_SU()
     do irec_local = 1,nrec_local
 
        read(IIN_SU1,pos=4*((irec_local-1)*(60+NSTEP) + 60 + it_start)+1 ) adj_temp
-       source_adjoint(irec_local,:,1)=adj_temp(:)
+       source_adjoint(1,irec_local,:) = adj_temp(:)
        read(IIN_SU2,pos=4*((irec_local-1)*(60+NSTEP) + 60 + it_start)+1 ) adj_temp
-       source_adjoint(irec_local,:,2)=adj_temp(:)
+       source_adjoint(2,irec_local,:) = adj_temp(:)
        read(IIN_SU3,pos=4*((irec_local-1)*(60+NSTEP) + 60 + it_start)+1 ) adj_temp
-       source_adjoint(irec_local,:,3)=adj_temp(:)
+       source_adjoint(3,irec_local,:) = adj_temp(:)
 
     enddo
 
@@ -299,18 +348,24 @@ subroutine compute_arrays_adjoint_source_SU()
 
   endif
 
-end subroutine compute_arrays_adjoint_source_SU
+  end subroutine compute_arrays_adjoint_source_SU
+
+!
+!-------------------------------------------------------------------------------------------------
+!
 
 
-subroutine compute_arrays_source_forcesolution_fluid(ispec_selected_source,sourcearray, &
-                                   hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
-                                   factor_source, comp_x,comp_y,comp_z, nu_source, &
-                                   xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz,nspec)
+  subroutine compute_arrays_source_forcesolution_fluid(ispec_selected_source,sourcearray, &
+                                                       hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
+                                                       factor_source, comp_x,comp_y,comp_z, nu_source)
   use constants
+
+  use specfem_par, only: xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz, &
+                          irregular_element_number,xix_regular
 
   implicit none
 
-  integer :: ispec_selected_source,nspec
+  integer :: ispec_selected_source,ispec_irreg
 
   real(kind=CUSTOM_REAL), dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: sourcearray
   double precision, dimension(NGLLX) :: hxis,hpxis
@@ -321,8 +376,6 @@ subroutine compute_arrays_source_forcesolution_fluid(ispec_selected_source,sourc
   real(kind=CUSTOM_REAL) :: factor_source
 
   double precision :: FX, FY, FZ
-
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec) :: xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
 
   ! local parameters
   double precision :: xixd,xiyd,xizd,etaxd,etayd,etazd,gammaxd,gammayd,gammazd
@@ -348,33 +401,46 @@ subroutine compute_arrays_source_forcesolution_fluid(ispec_selected_source,sourc
   dgammas_dy = ZERO
   dgammas_dz = ZERO
 
+  ispec_irreg = irregular_element_number(ispec_selected_source)
+  if (ispec_irreg == 0) xixd = dble(xix_regular)
+
   do m = 1,NGLLZ
      do l = 1,NGLLY
         do k = 1,NGLLX
 
-           xixd    = dble(xix(k,l,m,ispec_selected_source))
-           xiyd    = dble(xiy(k,l,m,ispec_selected_source))
-           xizd    = dble(xiz(k,l,m,ispec_selected_source))
-           etaxd   = dble(etax(k,l,m,ispec_selected_source))
-           etayd   = dble(etay(k,l,m,ispec_selected_source))
-           etazd   = dble(etaz(k,l,m,ispec_selected_source))
-           gammaxd = dble(gammax(k,l,m,ispec_selected_source))
-           gammayd = dble(gammay(k,l,m,ispec_selected_source))
-           gammazd = dble(gammaz(k,l,m,ispec_selected_source))
-
            hlagrange = hxis(k) * hetas(l) * hgammas(m)
 
-           dxis_dx = dxis_dx + hlagrange * xixd
-           dxis_dy = dxis_dy + hlagrange * xiyd
-           dxis_dz = dxis_dz + hlagrange * xizd
+           if (ispec_irreg /= 0) then !irregular element
 
-           detas_dx = detas_dx + hlagrange * etaxd
-           detas_dy = detas_dy + hlagrange * etayd
-           detas_dz = detas_dz + hlagrange * etazd
+             xixd    = dble(xix(k,l,m,ispec_irreg))
+             xiyd    = dble(xiy(k,l,m,ispec_irreg))
+             xizd    = dble(xiz(k,l,m,ispec_irreg))
+             etaxd   = dble(etax(k,l,m,ispec_irreg))
+             etayd   = dble(etay(k,l,m,ispec_irreg))
+             etazd   = dble(etaz(k,l,m,ispec_irreg))
+             gammaxd = dble(gammax(k,l,m,ispec_irreg))
+             gammayd = dble(gammay(k,l,m,ispec_irreg))
+             gammazd = dble(gammaz(k,l,m,ispec_irreg))
 
-           dgammas_dx = dgammas_dx + hlagrange * gammaxd
-           dgammas_dy = dgammas_dy + hlagrange * gammayd
-           dgammas_dz = dgammas_dz + hlagrange * gammazd
+             dxis_dx = dxis_dx + hlagrange * xixd
+             dxis_dy = dxis_dy + hlagrange * xiyd
+             dxis_dz = dxis_dz + hlagrange * xizd
+
+             detas_dx = detas_dx + hlagrange * etaxd
+             detas_dy = detas_dy + hlagrange * etayd
+             detas_dz = detas_dz + hlagrange * etazd
+
+             dgammas_dx = dgammas_dx + hlagrange * gammaxd
+             dgammas_dy = dgammas_dy + hlagrange * gammayd
+             dgammas_dz = dgammas_dz + hlagrange * gammazd
+
+           else ! regular_element
+
+             dxis_dx = dxis_dx + hlagrange * xixd
+             detas_dy = detas_dy + hlagrange * xixd
+             dgammas_dz = dgammas_dz + hlagrange * xixd
+
+           endif
 
        enddo
      enddo
@@ -417,4 +483,5 @@ subroutine compute_arrays_source_forcesolution_fluid(ispec_selected_source,sourc
 
   ! distinguish between single and double precision for reals
   sourcearray(:,:,:,:) = real(sourcearrayd(:,:,:,:), kind=CUSTOM_REAL)
-end subroutine compute_arrays_source_forcesolution_fluid
+
+  end subroutine compute_arrays_source_forcesolution_fluid

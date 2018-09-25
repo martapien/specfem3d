@@ -108,6 +108,9 @@
   integer, parameter :: ADIOS_BUFFER_SIZE_IN_MB = 200
   character(len=*), parameter :: ADIOS_TRANSPORT_METHOD = 'MPI'
 
+  ! ASDF parameter
+  logical, parameter :: OUTPUT_PROVENANCE = .false.
+
 !!-----------------------------------------------------------
 !!
 !! smoothing of the sensitivity kernels
@@ -271,6 +274,10 @@
   integer, parameter :: IIN_veloc_dsm = 51, IIN_tract_dsm = 52
   integer, parameter :: IIN_displ_axisem = 54
 
+! stores mesh files as cubit-exported files into directory MESH/ (for single process run)
+! todo: we could put this parameter into the Mesh_Par_file
+  logical, parameter :: SAVE_MESH_AS_CUBIT = .false.
+
 
 !!-----------------------------------------------------------
 !!
@@ -348,14 +355,19 @@
 ! show volumetric field
   logical, parameter :: VTK_SHOW_VOLUME       = .true.
 
+!!-----------------------------------------------------------
+!! Option to run several events within the same MPI slice when using GPU acoustic simulations
+!!-----------------------------------------------------------
+
+  integer, parameter :: NB_RUNS_ACOUSTIC_GPU = 1
 
 !------------------------------------------------------
 !----------- do not modify anything below -------------
 !------------------------------------------------------
 
-! on some processors (e.g. some Intel chips) it is necessary to suppress underflows
-! by using a small initial field instead of zero
-  logical, parameter :: FIX_UNDERFLOW_PROBLEM = .true.
+!! DK DK August 2018: on modern processors this does not happen any more,
+!! DK DK August 2018: and thus no need to purposely lose accuracy to avoid underflows; thus turning it off by default
+  logical, parameter :: FIX_UNDERFLOW_PROBLEM = .false. ! .true.
 
 ! some useful constants
   double precision, parameter :: PI = 3.141592653589793d0

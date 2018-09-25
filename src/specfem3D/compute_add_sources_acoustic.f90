@@ -190,7 +190,7 @@
                     ! note: we take the first component of the adj_sourcearrays
                     !          the idea is to have e.g. a pressure source, where all 3 components would be the same
                     potential_dot_dot_acoustic(iglob) = potential_dot_dot_acoustic(iglob) &
-                                + source_adjoint(irec_local,NTSTEP_BETWEEN_READ_ADJSRC - mod(it-1,NTSTEP_BETWEEN_READ_ADJSRC),1) * &
+                                + source_adjoint(1,irec_local,NTSTEP_BETWEEN_READ_ADJSRC - mod(it-1,NTSTEP_BETWEEN_READ_ADJSRC)) * &
                                 hxir_store(irec_local,i)*hetar_store(irec_local,j)*hgammar_store(irec_local,k)
                   enddo
                 enddo
@@ -325,7 +325,7 @@
                          USE_EXTERNAL_SOURCE_FILE,user_source_time_function,USE_BINARY_FOR_SEISMOGRAMS, &
                          NSOURCES,it,SIMULATION_TYPE,NSTEP,nrec, &
                          nadj_rec_local,NTSTEP_BETWEEN_READ_ADJSRC,Mesh_pointer, &
-                         INVERSE_FWI_FULL_PROBLEM
+                         INVERSE_FWI_FULL_PROBLEM,run_number_of_the_source
 
   implicit none
 
@@ -368,7 +368,7 @@
       ! only implements SIMTYPE=1 and NOISE_TOM=0
       ! write(*,*) "Fortran dt = ", dt
       ! change dt -> DT
-      call compute_add_sources_ac_cuda(Mesh_pointer,NSOURCES,stf_pre_compute)
+      call compute_add_sources_ac_cuda(Mesh_pointer,NSOURCES,stf_pre_compute,run_number_of_the_source)
     endif
   endif
 
@@ -474,7 +474,7 @@
       enddo
 
       ! only implements SIMTYPE=3
-      call compute_add_sources_ac_s3_cuda(Mesh_pointer,NSOURCES,stf_pre_compute)
+      call compute_add_sources_ac_s3_cuda(Mesh_pointer,NSOURCES,stf_pre_compute,run_number_of_the_source)
     endif
   endif
 

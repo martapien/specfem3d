@@ -503,6 +503,13 @@
       write(*,*)
     endif
 
+    call read_value_logical(ASDF_FORMAT, 'ASDF_FORMAT', ier)
+    if (ier /= 0) then
+      some_parameters_missing_from_Par_file = .true.
+      write(*,'(a)') 'ASDF_FORMAT                       = .false.'
+      write(*,*)
+    endif
+
     call read_value_logical(WRITE_SEISMOGRAMS_BY_MASTER, 'WRITE_SEISMOGRAMS_BY_MASTER', ier)
     if (ier /= 0) then
       some_parameters_missing_from_Par_file = .true.
@@ -558,6 +565,13 @@
     if (ier /= 0) then
       some_parameters_missing_from_Par_file = .true.
       write(*,'(a)') 'NTSTEP_BETWEEN_READ_ADJSRC      = 0'
+      write(*,*)
+    endif
+
+    call read_value_logical(READ_ADJSRC_ASDF, 'READ_ADJSRC_ASDF', ier)
+    if (ier /= 0) then
+      some_parameters_missing_from_Par_file = .true.
+      write(*,'(a)') 'READ_ADJSRC_ASDF               = .false.'
       write(*,*)
     endif
 
@@ -849,7 +863,7 @@
     endif
 
     ! checks number of nodes for 2D and 3D shape functions for quadrilaterals and hexahedra
-    ! curvature (i.e. HEX27 elements) is not handled by our internal mesher, for that use Gmsh (CUBIT does not handle it either)
+    ! curvature (i.e. HEX27 elements) is not handled by our internal mesher, for that use CUBIT/Trelis or Gmsh for instance
     if (NGNOD == 8) then
       NGNOD2D = 4
     else if (NGNOD == 27) then
@@ -1002,12 +1016,14 @@
     call bcast_all_singlel(SAVE_SEISMOGRAMS_IN_ADJOINT_RUN)
     call bcast_all_singlel(USE_BINARY_FOR_SEISMOGRAMS)
     call bcast_all_singlel(SU_FORMAT)
+    call bcast_all_singlel(ASDF_FORMAT)
     call bcast_all_singlel(WRITE_SEISMOGRAMS_BY_MASTER)
     call bcast_all_singlel(SAVE_ALL_SEISMOS_IN_ONE_FILE)
     call bcast_all_singlel(USE_TRICK_FOR_BETTER_PRESSURE)
     call bcast_all_singlel(USE_SOURCE_ENCODING)
     call bcast_all_singlel(OUTPUT_ENERGY)
     call bcast_all_singlei(NTSTEP_BETWEEN_OUTPUT_ENERGY)
+    call bcast_all_singlel(READ_ADJSRC_ASDF)
     call bcast_all_singlel(ANISOTROPIC_KL)
     call bcast_all_singlel(SAVE_TRANSVERSE_KL)
     call bcast_all_singlel(APPROXIMATE_HESS_KL)
@@ -1178,14 +1194,14 @@
     enddo
     close(21)
     if (.not. USE_EXTERNAL_SOURCE_FILE) then
-       if (mod(icounter,NLINES_PER_CMTSOLUTION_SOURCE) /= 0) &
+      NSOURCES = icounter / NLINES_PER_CMTSOLUTION_SOURCE
+      if (mod(icounter,NLINES_PER_CMTSOLUTION_SOURCE) /= 0) &
             stop 'Error total number of lines in CMTSOLUTION file should be a multiple of NLINES_PER_CMTSOLUTION_SOURCE'
     else
-       !! VM VM in case of USE_EXTERNAL_SOURCE_FILE we have to read one additional line per source (the name of external source file)
-       NSOURCES = icounter / (NLINES_PER_FORCESOLUTION_SOURCE+1)
+      !! VM VM in case of USE_EXTERNAL_SOURCE_FILE we have to read one additional line per source (the name of external source file)
+      NSOURCES = icounter / (NLINES_PER_CMTSOLUTION_SOURCE+1)
     endif
 
-    NSOURCES = icounter / NLINES_PER_CMTSOLUTION_SOURCE
     if (NSOURCES < 1) stop 'Error need at least one source in CMTSOLUTION file'
 
     ! compute the minimum value of hdur in CMTSOLUTION file
@@ -1204,9 +1220,17 @@
       minval_hdur = min(minval_hdur,hdur)
 
       ! skip other information
-      do idummy = 1,9
-        read(21,"(a)") dummystring
-      enddo
+      if (.not. USE_EXTERNAL_SOURCE_FILE) then
+        do idummy = 1,9
+          read(21,"(a)") dummystring
+        enddo
+      else
+! we need to skip 10 lines instead of 9 when USE_EXTERNAL_SOURCE_FILE is .true.
+! because there is an extra line for source time function file name
+        do idummy = 1,10
+          read(21,"(a)") dummystring
+        enddo
+      endif
 
     enddo
     close(21)

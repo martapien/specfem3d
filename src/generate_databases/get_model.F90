@@ -38,7 +38,8 @@
 
   use create_regions_mesh_ext_par
 
-  use constants, only: INJECTION_TECHNIQUE_IS_FK
+  use constants, only: INJECTION_TECHNIQUE_IS_FK,INJECTION_TECHNIQUE_IS_DSM, &
+        INJECTION_TECHNIQUE_IS_AXISEM, INJECTION_TECHNIQUE_IS_INSTASEIS
   use shared_parameters, only: COUPLE_WITH_INJECTION_TECHNIQUE,MESH_A_CHUNK_OF_THE_EARTH,INJECTION_TECHNIQUE_TYPE
 
   implicit none
@@ -75,10 +76,9 @@
   ispec_is_poroelastic(:) = .false.
 
   ! prepares tomographic models if needed for elements with undefined material definitions
-!#ifndef DEBUG_COUPLED
-!  write(*, *) "XXXXXXXXXXXXX"
-!  if (nundefMat_ext_mesh > 0 .or. IMODEL == IMODEL_TOMO) call model_tomography_broadcast(myrank)
-!#endif
+  ! MPC review in original version it got corrected and is uncommented but I am not sure about it
+  if (nundefMat_ext_mesh > 0 .or. IMODEL == IMODEL_TOMO) call model_tomography_broadcast(myrank)
+
 
   ! prepares external model values if needed
   select case (IMODEL)
@@ -102,9 +102,20 @@
     if (myrank == 0) then
       write(IMAIN,*)
       write(IMAIN,*)
-      write(IMAIN,*) '         USING A HYBRID METHOD (THE CODE IS COUPLED WITH AN INJECTION TECHNIQUE)'
+      write(IMAIN,*) '     USING A HYBRID METHOD (THE CODE IS COUPLED WITH AN INJECTION TECHNIQUE)'
       write(IMAIN,*)
-      write(IMAIN,*) '         INJECTION TECHNIQUE TYPE = ', INJECTION_TECHNIQUE_TYPE
+      select case(INJECTION_TECHNIQUE_TYPE)
+      case (INJECTION_TECHNIQUE_IS_DSM)
+        write(IMAIN,*) '     INJECTION TECHNIQUE TYPE = ', INJECTION_TECHNIQUE_TYPE,' (DSM) '
+      case (INJECTION_TECHNIQUE_IS_AXISEM)
+        write(IMAIN,*) '     INJECTION TECHNIQUE TYPE = ', INJECTION_TECHNIQUE_TYPE,' (AXISEM) '
+      case (INJECTION_TECHNIQUE_IS_FK)
+        write(IMAIN,*) '     INJECTION TECHNIQUE TYPE = ', INJECTION_TECHNIQUE_TYPE,' (FK) '
+      case (INJECTION_TECHNIQUE_IS_INSTASEIS)
+        write(IMAIN,*) '     INJECTION TECHNIQUE TYPE = ', INJECTION_TECHNIQUE_TYPE,' (INSTASEIS) '
+      case default
+        stop 'Invalid INJECTION_TECHNIQUE_TYPE chosen, must be 1 == DSM, 2 == AXISEM or 3 == FK, 4 == INSTASEIS'
+      end select
       write(IMAIN,*)
       write(IMAIN,*)
     endif
@@ -247,13 +258,6 @@
             rho_vp(i,j,k,ispec) = rho*vp
             rho_vs(i,j,k,ispec) = rho*vs
             !
-            rho_vpI(i,j,k,ispec) = rho*vp
-            rho_vpII(i,j,k,ispec) = 0.d0
-            rho_vsI(i,j,k,ispec) = rho*vs
-            rhoarraystore(1,i,j,k,ispec) = rho
-            rhoarraystore(2,i,j,k,ispec) = rho
-            phistore(i,j,k,ispec) = 0.d0
-            tortstore(i,j,k,ispec) = 1.d0
             !end pll
 
           else
@@ -344,20 +348,20 @@
     enddo
 
     ! user output
+    ! MPC review why was this commented out in my version?
+        if (myrank == 0) then
+          if (mod(ispec,nspec/10) == 0) then
+            tCPU = wtime() - time_start
+            ! remaining
+            tCPU = (10.0-ispec/(nspec/10.0))/ispec/(nspec/10.0)*tCPU
+            write(IMAIN,*) "    ",ispec/(nspec/10) * 10," %", &
+                          " time remaining:", tCPU,"s"
 
-    !if (myrank == 0) then
-    !  if (mod(ispec,nspec/10) == 0) then
-    !    tCPU = wtime() - time_start
-        ! remaining
-    !    tCPU = (10.0-ispec/(nspec/10.0))/ispec/(nspec/10.0)*tCPU
-    !    write(IMAIN,*) "    ",ispec/(nspec/10) * 10," %", &
-    !                  " time remaining:", tCPU,"s"
+            ! flushes file buffer for main output file (IMAIN)
+            call flush_IMAIN()
 
-        ! flushes file buffer for main output file (IMAIN)
-    !    call flush_IMAIN()
-
-    !  endif
-    !endif
+          endif
+        endif
   enddo
 
   ! checks material domains
@@ -393,9 +397,9 @@
   call any_all_l( ANY(ispec_is_poroelastic), POROELASTIC_SIMULATION )
 
   ! deallocates tomographic arrays
-!#ifndef DEBUG_COUPLED
-!  if ( (nundefMat_ext_mesh > 0 .or. IMODEL == IMODEL_TOMO) ) call deallocate_tomography_files()
-!#endif
+  !MPC review why was this commented out in my version?
+  if ( (nundefMat_ext_mesh > 0 .or. IMODEL == IMODEL_TOMO) ) call deallocate_tomography_files()
+
 
   end subroutine get_model
 
@@ -428,7 +432,7 @@
   implicit none
 
   integer, intent(in) :: nmat_ext_mesh
-  double precision, dimension(16,nmat_ext_mesh),intent(in) :: materials_ext_mesh
+  double precision, dimension(16,nmat_ext_mesh), intent(in) :: materials_ext_mesh
 
   integer, intent(in) :: nundefMat_ext_mesh
   character(len=MAX_STRING_LEN), dimension(6,nundefMat_ext_mesh) :: undef_mat_prop
@@ -626,7 +630,6 @@
     !        be able to superimpose a model onto the default one:
 
     ! material values determined by mesh properties
-#ifndef DEBUG_COUPLED
     call model_default(materials_ext_mesh,nmat_ext_mesh, &
                        undef_mat_prop,nundefMat_ext_mesh, &
                        imaterial_id,imaterial_def, &
@@ -634,7 +637,6 @@
                        iflag_aniso,qkappa_atten,qmu_atten,idomain_id, &
                        rho_s,kappa_s,rho_f,kappa_f,eta_f,kappa_fr,mu_fr, &
                        phi,tort,kxx,kxy,kxz,kyy,kyz,kzz)
-#endif
 
     ! user model from external routine
     ! adds/gets velocity model as specified in model_external_values.f90

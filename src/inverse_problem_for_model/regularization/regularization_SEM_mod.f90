@@ -367,9 +367,9 @@ contains
 !    endif
 
 
-!    allocate(xgrid(NGLLX,NGLLY,NGLLZ,nspec_recevd), &
-!             ygrid(NGLLX,NGLLY,NGLLZ,nspec_recevd), &
-!             zgrid(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!    allocate(xgrid(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!    allocate(ygrid(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!    allocate(zgrid(NGLLX,NGLLY,NGLLZ,nspec_recevd))
 
 !    allocate(iglob_store(NGLLX,NGLLY,NGLLZ,nspec_recevd))
 
@@ -393,16 +393,16 @@ contains
 
 !                      allocate(ispec_to_send(nspec_to_send))
 
-!                      allocate(iglob_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended), &
-!                               iglob_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!                      allocate(iglob_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
+!                      allocate(iglob_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
 
-!                      allocate(xgrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended), &
-!                               ygrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended), &
-!                               zgrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
+!                      allocate(xgrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
+!                      allocate(ygrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
+!                      allocate(zgrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
 
-!                      allocate(xgrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd), &
-!                               ygrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd), &
-!                               zgrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!                      allocate(xgrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!                      allocate(ygrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!                      allocate(zgrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
 
 !                      mem_tmp = 4*nspec_to_send + 4*NGLLX*NGLLY*NGLLZ*nspec_sended + &
 !                                4*NGLLX*NGLLY*NGLLZ*nspec_recevd + &
@@ -481,16 +481,16 @@ contains
 
 !                     allocate(ispec_to_send(nspec_to_send))
 
-!                     allocate(iglob_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended), &
-!                              iglob_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!                     allocate(iglob_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
+!                     allocate(iglob_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
 
-!                     allocate(xgrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended), &
-!                              ygrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended), &
-!                              zgrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
+!                     allocate(xgrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
+!                     allocate(ygrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
+!                     allocate(zgrid_to_send(NGLLX,NGLLY,NGLLZ,nspec_sended))
 
-!                     allocate(xgrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd), &
-!                              ygrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd), &
-!                              zgrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!                     allocate(xgrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!                     allocate(ygrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
+!                     allocate(zgrid_to_recv(NGLLX,NGLLY,NGLLZ,nspec_recevd))
 
 !                     mem_tmp = 4*nspec_to_send + 4*NGLLX*NGLLY*NGLLZ*nspec_sended + &
 !                               4*NGLLX*NGLLY*NGLLZ*nspec_recevd+&
@@ -918,7 +918,8 @@ contains
 !                call recv_i(list_of_gll_to_recv, Npts_recv_dummy(irank0), irank0, recvtag0)
 
 
-!                allocate(list_iglob_to_send(irank0)%list_of_iglob(Npts_recv_dummy(irank0)))   !! pb avec cette allocation !!!
+!! pb avec cette allocation !!!
+!                allocate(list_iglob_to_send(irank0)%list_of_iglob(Npts_recv_dummy(irank0)))
 
 !                list_iglob_to_send(irank0)%Niglob=Npts_recv_dummy(irank0)
 !                list_iglob_to_send(irank0)%list_of_iglob(:)=list_of_gll_to_recv(:)    !! irank1 recoit liste de irank0
@@ -1374,6 +1375,7 @@ contains
   read(IIN) nnodes_ext_mesh
 
   allocate(nodes_coords_ext_mesh(NDIM,nnodes_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 164')
   if (ier /= 0) stop 'Error allocating array nodes_coords_ext_mesh'
 
   do inode = 1, nnodes_ext_mesh
@@ -1392,6 +1394,7 @@ contains
   read(IIN) nmat_ext_mesh, nundefMat_ext_mesh
 
   allocate(materials_ext_mesh(16,nmat_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 165')
   if (ier /= 0) stop 'Error allocating array materials_ext_mesh'
   materials_ext_mesh(:,:) = 0.d0
 
@@ -1416,6 +1419,7 @@ contains
   call synchronize_all()
 
   allocate(undef_mat_prop(6,nundefMat_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 166')
   if (ier /= 0) stop 'Error allocating array undef_mat_prop'
   do imat = 1, nundefMat_ext_mesh
      ! format example tomography:
@@ -1435,8 +1439,10 @@ contains
 ! element indexing
   read(IIN) nelmnts_ext_mesh
   allocate(elmnts_ext_mesh(NGNOD,nelmnts_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 167')
   if (ier /= 0) stop 'Error allocating array elmnts_ext_mesh'
   allocate(mat_ext_mesh(2,nelmnts_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 168')
   if (ier /= 0) stop 'Error allocating array mat_ext_mesh'
 
   ! reads in material association for each spectral element and corner node indices
@@ -1482,36 +1488,42 @@ contains
   NSPEC2D_TOP = nspec2D_top_ext
 
   allocate(ibelm_xmin(nspec2D_xmin),nodes_ibelm_xmin(NGNOD2D,nspec2D_xmin),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 169')
   if (ier /= 0) stop 'Error allocating array ibelm_xmin etc.'
   do ispec2D = 1,nspec2D_xmin
      read(IIN) ibelm_xmin(ispec2D),(nodes_ibelm_xmin(j,ispec2D),j=1,NGNOD2D)
   enddo
 
   allocate(ibelm_xmax(nspec2D_xmax),nodes_ibelm_xmax(NGNOD2D,nspec2D_xmax),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 170')
   if (ier /= 0) stop 'Error allocating array ibelm_xmax etc.'
   do ispec2D = 1,nspec2D_xmax
      read(IIN) ibelm_xmax(ispec2D),(nodes_ibelm_xmax(j,ispec2D),j=1,NGNOD2D)
   enddo
 
   allocate(ibelm_ymin(nspec2D_ymin),nodes_ibelm_ymin(NGNOD2D,nspec2D_ymin),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 171')
   if (ier /= 0) stop 'Error allocating array ibelm_ymin'
   do ispec2D = 1,nspec2D_ymin
      read(IIN) ibelm_ymin(ispec2D),(nodes_ibelm_ymin(j,ispec2D),j=1,NGNOD2D)
   enddo
 
   allocate(ibelm_ymax(nspec2D_ymax),nodes_ibelm_ymax(NGNOD2D,nspec2D_ymax),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 172')
   if (ier /= 0) stop 'Error allocating array ibelm_ymax etc.'
   do ispec2D = 1,nspec2D_ymax
      read(IIN) ibelm_ymax(ispec2D),(nodes_ibelm_ymax(j,ispec2D),j=1,NGNOD2D)
   enddo
 
   allocate(ibelm_bottom(nspec2D_bottom_ext),nodes_ibelm_bottom(NGNOD2D,nspec2D_bottom_ext),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 173')
   if (ier /= 0) stop 'Error allocating array ibelm_bottom etc.'
   do ispec2D = 1,nspec2D_bottom_ext
      read(IIN) ibelm_bottom(ispec2D),(nodes_ibelm_bottom(j,ispec2D),j=1,NGNOD2D)
   enddo
 
   allocate(ibelm_top(nspec2D_top_ext),nodes_ibelm_top(NGNOD2D,nspec2D_top_ext),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 174')
   if (ier /= 0) stop 'Error allocating array ibelm_top etc.'
   do ispec2D = 1,nspec2D_top_ext
      read(IIN) ibelm_top(ispec2D),(nodes_ibelm_top(j,ispec2D),j=1,NGNOD2D)
@@ -1558,8 +1570,10 @@ contains
 
      ! reads C-PML regions and C-PML spectral elements global indexing
      allocate(CPML_to_spec(nspec_cpml),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 175')
      if (ier /= 0) stop 'Error allocating array CPML_to_spec'
      allocate(CPML_regions(nspec_cpml),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 176')
      if (ier /= 0) stop 'Error allocating array CPML_regions'
 
      do i=1,nspec_cpml
@@ -1577,6 +1591,7 @@ contains
 
      ! reads mask of C-PML elements for all elements in this partition
      allocate(is_CPML(NSPEC_AB),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 177')
      if (ier /= 0) stop 'Error allocating array is_CPML'
 
      do i=1,NSPEC_AB
@@ -1595,14 +1610,19 @@ contains
 
   ! allocates interfaces
   allocate(my_neighbors_ext_mesh(num_interfaces_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 178')
   if (ier /= 0) stop 'Error allocating array my_neighbors_ext_mesh'
   allocate(my_nelmnts_neighbors_ext_mesh(num_interfaces_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 179')
   if (ier /= 0) stop 'Error allocating array my_nelmnts_neighbors_ext_mesh'
   allocate(my_interfaces_ext_mesh(6,max_interface_size_ext_mesh,num_interfaces_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 180')
   if (ier /= 0) stop 'Error allocating array my_interfaces_ext_mesh'
   allocate(ibool_interfaces_ext_mesh(NGLLX*NGLLX*max_interface_size_ext_mesh,num_interfaces_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 181')
   if (ier /= 0) stop 'Error allocating array ibool_interfaces_ext_mesh'
   allocate(nibool_interfaces_ext_mesh(num_interfaces_ext_mesh),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 182')
   if (ier /= 0) stop 'Error allocating array nibool_interfaces_ext_mesh'
 
   ! loops over MPI interfaces with other partitions
@@ -1650,6 +1670,7 @@ contains
 
      ! reads in element informations
      allocate(ibelm_moho(nspec2D_moho_ext),nodes_ibelm_moho(NGNOD2D,nspec2D_moho_ext),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 183')
      if (ier /= 0) stop 'Error allocating array ibelm_moho etc.'
      do ispec2D = 1,nspec2D_moho_ext
         ! format: #element_id #node_id1 #node_id2 #node_id3 #node_id4
@@ -1665,6 +1686,7 @@ contains
      ! allocate dummy array
      nspec2D_moho_ext = 0
      allocate(ibelm_moho(nspec2D_moho_ext),nodes_ibelm_moho(NGNOD2D,nspec2D_moho_ext),stat=ier)
+     if (ier /= 0) call exit_MPI_without_rank('error allocating array 184')
      if (ier /= 0) stop 'Error allocating dumy array ibelm_moho etc.'
   endif
 
@@ -1711,6 +1733,8 @@ contains
     real(kind=CUSTOM_REAL)                                     :: length
     integer                                                    :: itest, Nb_test
 
+  integer :: ier
+
     value_to_test(1)=2.
     value_to_test(2)=4.
     value_to_test(3)=8.
@@ -1724,10 +1748,10 @@ contains
          elemsize_min_glob,elemsize_max_glob, &
          distance_min_glob,distance_max_glob)
 
-
-
-    allocate(field(NGLLX, NGLLY, NGLLZ, NSPEC_AB), &
-             laplacian_of_field(NGLLX, NGLLY, NGLLZ, NSPEC_AB))
+    allocate(field(NGLLX, NGLLY, NGLLZ, NSPEC_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 185')
+    allocate(laplacian_of_field(NGLLX, NGLLY, NGLLZ, NSPEC_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 186')
 
     if (myrank == 0) then
        write(INVERSE_LOG_FILE,*)
@@ -1920,8 +1944,11 @@ contains
     real(kind=CUSTOM_REAL),  dimension(:),   allocatable                :: field_to_derivate
     real(kind=CUSTOM_REAL),  dimension(:,:), allocatable                :: Laplac_boundary, LapF
 
+  integer :: ier
+
     !! the order below is important do not change it.
-    allocate(Laplac_boundary(NDIM, Nb_iglob_on_faces), field_to_derivate(NGLOB_AB), LapF(NDIM,NGLOB_AB))
+    allocate(Laplac_boundary(NDIM, Nb_iglob_on_faces), field_to_derivate(NGLOB_AB), LapF(NDIM,NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 187')
 
     !! 1/ compute FD derivatives
     call compute_laplacian_FD(Laplac_boundary, field, regularization_fd)
@@ -1960,9 +1987,14 @@ contains
     real(kind=CUSTOM_REAL),  dimension(:),   allocatable                :: Laplac_boundary, nGrad_boundary
     real(kind=CUSTOM_REAL),  dimension(:),   allocatable                :: nGrad, LapF
 
-    !! the order below is important do not change it.
-    allocate(Laplac_boundary(Nb_iglob_on_faces), nGrad_boundary(Nb_iglob_on_faces), &
-             field_to_derivate(NGLOB_AB), LapF(NGLOB_AB), nGrad(NGLOB_AB))
+  integer :: ier
+
+    allocate(Laplac_boundary(Nb_iglob_on_faces), nGrad_boundary(Nb_iglob_on_faces),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 188')
+    allocate(field_to_derivate(NGLOB_AB), LapF(NGLOB_AB), nGrad(NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 189')
+
+    !! the order below is important, do not change it.
 
     !! 1/ compute FD derivatives
     !! NOT USE FOR NOW call compute_gradient_laplacian_FD(nGrad_boundary, Laplac_boundary, field, regularization_fd)
@@ -2005,9 +2037,14 @@ contains
     real(kind=CUSTOM_REAL)                                                    :: penalty
     integer                                                                   :: i,j,k,ispec,iglob
 
-    allocate(field(NDIM,NGLOB_AB), field_to_derivate(NGLOB_AB))
-    allocate(laplacian_of_field(NGLOB_AB),  norm_grad_of_field(NGLOB_AB))
-    allocate(valence(NGLOB_AB))
+  integer :: ier
+
+    allocate(field(NDIM,NGLOB_AB), field_to_derivate(NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 190')
+    allocate(laplacian_of_field(NGLOB_AB),  norm_grad_of_field(NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 191')
+    allocate(valence(NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 192')
 
 
     field(:,:)=0._CUSTOM_REAL
@@ -2099,10 +2136,16 @@ contains
     real(kind=CUSTOM_REAL)                                                    :: penalty
     integer                                                                   :: i,j,k,ispec,iglob
 
-    allocate(field(NDIM,NGLOB_AB))
-    allocate(numerical_laplacian_of_field(NGLOB_AB))
-    allocate(valence(NGLOB_AB))
-    allocate(field_to_derivate(NGLLX,NGLLX,NGLLX,NSPEC_AB))
+  integer :: ier
+
+    allocate(field(NDIM,NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 193')
+    allocate(numerical_laplacian_of_field(NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 194')
+    allocate(valence(NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 195')
+    allocate(field_to_derivate(NGLLX,NGLLX,NGLLX,NSPEC_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 196')
 
     field(:,:)=0._CUSTOM_REAL
     valence(:)=0._CUSTOM_REAL
@@ -2113,7 +2156,7 @@ contains
        do k=1,NGLLZ
           do j=1,NGLLY
              do i=1,NGLLX
-!!$                iglob=ibool(i,j,k,ispec)
+                iglob=ibool(i,j,k,ispec)
 !!$                field(1,iglob)=field(1,iglob) + current_model_vp(i,j,k,ispec)
 !!$                field(2,iglob)=field(2,iglob) + current_model_vs(i,j,k,ispec)
 !!$                field(3,iglob)=field(3,iglob) + current_model_rh(i,j,k,ispec)
@@ -2272,7 +2315,10 @@ contains
     real(kind=CUSTOM_REAL), dimension(:,:),          allocatable                     :: field_wksp, valence
     integer                                                       :: ispec, iglob, i, j, k
 
-    allocate(field_wksp(NDIM,NGLOB_AB), valence(NDIM,NGLOB_AB))
+  integer :: ier
+
+    allocate(field_wksp(NDIM,NGLOB_AB), valence(NDIM,NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 197')
 
     field_wksp(:,:) = 0.
     valence(:,:)=0.
@@ -2991,7 +3037,8 @@ contains
 !##################################################################################################################################
   subroutine compute_first_derivatives_lagrange(Df, field_to_derivate)
 
-    use specfem_par, only: xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz, hprime_xx
+    use specfem_par, only: xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz, hprime_xx, irregular_element_number, &
+                           xix_regular
 
     implicit none
     real(kind=CUSTOM_REAL), dimension(:),         allocatable, intent(in)     :: field_to_derivate
@@ -3003,7 +3050,7 @@ contains
     real(kind=CUSTOM_REAL)                                              :: xixl,xiyl,xizl
     real(kind=CUSTOM_REAL)                                              :: etaxl,etayl,etazl
     real(kind=CUSTOM_REAL)                                              :: gammaxl,gammayl,gammazl
-    integer                                                             :: ispec, iglob, i, j, k, l
+    integer                                                             :: ispec, ispec_irreg, iglob, i, j, k, l
 
 
     do ispec =1, NSPEC_AB
@@ -3015,6 +3062,8 @@ contains
              enddo
           enddo
        enddo
+
+       ispec_irreg = irregular_element_number(ispec)
 
        do k=1,NGLLZ
           do j=1,NGLLY
@@ -3038,20 +3087,28 @@ contains
                    tempx3l = tempx3l + dummyloc(i,j,l)*hp3
 
                 enddo
+                if (ispec_irreg /= 0 ) then !irregular element
+                  xixl = xix(i,j,k,ispec_irreg)
+                  xiyl = xiy(i,j,k,ispec_irreg)
+                  xizl = xiz(i,j,k,ispec_irreg)
+                  etaxl = etax(i,j,k,ispec_irreg)
+                  etayl = etay(i,j,k,ispec_irreg)
+                  etazl = etaz(i,j,k,ispec_irreg)
+                  gammaxl = gammax(i,j,k,ispec_irreg)
+                  gammayl = gammay(i,j,k,ispec_irreg)
+                  gammazl = gammaz(i,j,k,ispec_irreg)
 
-                xixl = xix(i,j,k,ispec)
-                xiyl = xiy(i,j,k,ispec)
-                xizl = xiz(i,j,k,ispec)
-                etaxl = etax(i,j,k,ispec)
-                etayl = etay(i,j,k,ispec)
-                etazl = etaz(i,j,k,ispec)
-                gammaxl = gammax(i,j,k,ispec)
-                gammayl = gammay(i,j,k,ispec)
-                gammazl = gammaz(i,j,k,ispec)
+                  Df(1,i,j,k,ispec) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
+                  Df(2,i,j,k,ispec) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
+                  Df(3,i,j,k,ispec) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
 
-                Df(1,i,j,k,ispec) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
-                Df(2,i,j,k,ispec) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
-                Df(3,i,j,k,ispec) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+                else !regular element
+
+                  Df(1,i,j,k,ispec) = xix_regular * tempx1l
+                  Df(2,i,j,k,ispec) = xix_regular * tempx2l
+                  Df(3,i,j,k,ispec) = xix_regular * tempx3l
+
+                endif
 
              enddo
           enddo
@@ -3068,7 +3125,9 @@ contains
 !##################################################################################################################################
   subroutine compute_laplac_lagrange(Lapf, field_to_derivate)
 
-    use specfem_par, only: xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz, hprime_xx
+    use specfem_par, only: xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz, hprime_xx, irregular_element_number, &
+                           xix_regular
+
 
     implicit none
     real(kind=CUSTOM_REAL), dimension(:),     allocatable, intent(in)     :: field_to_derivate
@@ -3082,7 +3141,7 @@ contains
     double precision                                              :: etaxl,etayl,etazl
     double precision                                              :: gammaxl,gammayl,gammazl
     double precision                                              :: coef_norm
-    integer                                                             :: ispec, iglob, i, j, k, l
+    integer                                                       :: ispec, ispec_irreg, iglob, i, j, k, l
     integer :: ispec_to_debug = 100
 
     if (DEBUG_MODE) write(IIDD,*)
@@ -3102,6 +3161,7 @@ contains
        coef_norm = maxval(abs(F(:,:,:)))
        !coef_norm=1.
        F(:,:,:)=F(:,:,:)/coef_norm
+       ispec_irreg = irregular_element_number(ispec)
 
        do k=1,NGLLZ
           do j=1,NGLLY
@@ -3126,19 +3186,29 @@ contains
 
                 enddo
 
-                xixl = xix(i,j,k,ispec)
-                xiyl = xiy(i,j,k,ispec)
-                xizl = xiz(i,j,k,ispec)
-                etaxl = etax(i,j,k,ispec)
-                etayl = etay(i,j,k,ispec)
-                etazl = etaz(i,j,k,ispec)
-                gammaxl = gammax(i,j,k,ispec)
-                gammayl = gammay(i,j,k,ispec)
-                gammazl = gammaz(i,j,k,ispec)
+                if (ispec_irreg /= 0 ) then !irregular element
+                  xixl = xix(i,j,k,ispec_irreg)
+                  xiyl = xiy(i,j,k,ispec_irreg)
+                  xizl = xiz(i,j,k,ispec_irreg)
+                  etaxl = etax(i,j,k,ispec_irreg)
+                  etayl = etay(i,j,k,ispec_irreg)
+                  etazl = etaz(i,j,k,ispec_irreg)
+                  gammaxl = gammax(i,j,k,ispec_irreg)
+                  gammayl = gammay(i,j,k,ispec_irreg)
+                  gammazl = gammaz(i,j,k,ispec_irreg)
 
-                dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l  ! df/dx
-                dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l  ! df/dy
-                dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l  ! df/dz
+                  dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
+                  dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
+                  dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+
+                else !regular element
+
+                  dF(1,i,j,k) = xix_regular * tempx1l
+                  dF(2,i,j,k) = xix_regular * tempx2l
+                  dF(3,i,j,k) = xix_regular * tempx3l
+
+                endif
+
                 if (DEBUG_MODE .and. ispec == ispec_to_debug .and. i == 1 .and. j == 1) write(IIDD,*)   &
                      k,zstore(iglob), dF(3,i,j,k)*coef_norm,  F(i,j,k)*coef_norm
                 !if (DEBUG_MODE) write(IIDD,*)   dF(1,i,j,k),  dF(2,i,j,k), dF(3,i,j,k),  F(i,j,k)
@@ -3178,16 +3248,29 @@ contains
                    tempx3l = tempx3l + F(i,j,l)*hp3
 
                 enddo
+                if (ispec_irreg /= 0 ) then !irregular element
 
-                xixl = xix(i,j,k,ispec)
-                xiyl = xiy(i,j,k,ispec)
-                xizl = xiz(i,j,k,ispec)
-                etaxl = etax(i,j,k,ispec)
-                etayl = etay(i,j,k,ispec)
-                etazl = etaz(i,j,k,ispec)
-                gammaxl = gammax(i,j,k,ispec)
-                gammayl = gammay(i,j,k,ispec)
-                gammazl = gammaz(i,j,k,ispec)
+                  xixl = xix(i,j,k,ispec_irreg)
+                  xiyl = xiy(i,j,k,ispec_irreg)
+                  xizl = xiz(i,j,k,ispec_irreg)
+                  etaxl = etax(i,j,k,ispec_irreg)
+                  etayl = etay(i,j,k,ispec_irreg)
+                  etazl = etaz(i,j,k,ispec_irreg)
+                  gammaxl = gammax(i,j,k,ispec_irreg)
+                  gammayl = gammay(i,j,k,ispec_irreg)
+                  gammazl = gammaz(i,j,k,ispec_irreg)
+
+                  dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
+           !       dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
+            !      dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+
+                else !regular element
+
+                  dF(1,i,j,k) = xix_regular * tempx1l
+             !     dF(2,i,j,k) = xix_regular * tempx2l
+              !    dF(3,i,j,k) = xix_regular * tempx3l
+
+                endif
 
                 dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
                 !dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
@@ -3199,6 +3282,7 @@ contains
              enddo
           enddo
        enddo
+
        if (DEBUG_MODE .and. ispec == ispec_to_debug) write(IIDD,*)
        !! deivate again df/dy / dy
        F(:,:,:)=dF(2,:,:,:)
@@ -3230,19 +3314,30 @@ contains
 
                 enddo
 
-                xixl = xix(i,j,k,ispec)
-                xiyl = xiy(i,j,k,ispec)
-                xizl = xiz(i,j,k,ispec)
-                etaxl = etax(i,j,k,ispec)
-                etayl = etay(i,j,k,ispec)
-                etazl = etaz(i,j,k,ispec)
-                gammaxl = gammax(i,j,k,ispec)
-                gammayl = gammay(i,j,k,ispec)
-                gammazl = gammaz(i,j,k,ispec)
+                if (ispec_irreg /= 0 ) then !irregular element
 
-               ! dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
-                dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
-               ! dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+                  xixl = xix(i,j,k,ispec_irreg)
+                  xiyl = xiy(i,j,k,ispec_irreg)
+                  xizl = xiz(i,j,k,ispec_irreg)
+                  etaxl = etax(i,j,k,ispec_irreg)
+                  etayl = etay(i,j,k,ispec_irreg)
+                  etazl = etaz(i,j,k,ispec_irreg)
+                  gammaxl = gammax(i,j,k,ispec_irreg)
+                  gammayl = gammay(i,j,k,ispec_irreg)
+                  gammazl = gammaz(i,j,k,ispec_irreg)
+
+           !       dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
+                  dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
+            !      dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+
+                else !regular element
+
+             !     dF(1,i,j,k) = xix_regular * tempx1l
+                  dF(2,i,j,k) = xix_regular * tempx2l
+              !    dF(3,i,j,k) = xix_regular * tempx3l
+
+                endif
+
                 !if (DEBUG_MODE) write(IIDD,*) 'y', dF(2,i,j,k)
                 LapF(1,iglob) = LapF(1,iglob) + dF(2,i,j,k) * coef_norm
              enddo
@@ -3278,20 +3373,30 @@ contains
                    tempx3l = tempx3l + F(i,j,l)*hp3
 
                 enddo
+                if (ispec_irreg /= 0 ) then !irregular element
 
-                xixl = xix(i,j,k,ispec)
-                xiyl = xiy(i,j,k,ispec)
-                xizl = xiz(i,j,k,ispec)
-                etaxl = etax(i,j,k,ispec)
-                etayl = etay(i,j,k,ispec)
-                etazl = etaz(i,j,k,ispec)
-                gammaxl = gammax(i,j,k,ispec)
-                gammayl = gammay(i,j,k,ispec)
-                gammazl = gammaz(i,j,k,ispec)
+                  xixl = xix(i,j,k,ispec_irreg)
+                  xiyl = xiy(i,j,k,ispec_irreg)
+                  xizl = xiz(i,j,k,ispec_irreg)
+                  etaxl = etax(i,j,k,ispec_irreg)
+                  etayl = etay(i,j,k,ispec_irreg)
+                  etazl = etaz(i,j,k,ispec_irreg)
+                  gammaxl = gammax(i,j,k,ispec_irreg)
+                  gammayl = gammay(i,j,k,ispec_irreg)
+                  gammazl = gammaz(i,j,k,ispec_irreg)
 
-               ! dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
-               ! dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
-                dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+            !      dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
+           !       dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
+                  dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+
+                else !regular element
+
+            !      dF(1,i,j,k) = xix_regular * tempx1l
+             !     dF(2,i,j,k) = xix_regular * tempx2l
+                  dF(3,i,j,k) = xix_regular * tempx3l
+
+                endif
+
                 !if (DEBUG_MODE) write(IIDD,*) 'z', dF(3,i,j,k)
                 LapF(1,iglob) = LapF(1,iglob) + dF(3,i,j,k) * coef_norm
                 if (DEBUG_MODE .and. ispec == ispec_to_debug .and. i == 1 .and. j == 1) write(IIDD,*)   &
@@ -3512,8 +3617,12 @@ contains
     real(kind=CUSTOM_REAL), dimension(:,:,:,:,:),    allocatable        :: Derivatives_of_field
     real(kind=CUSTOM_REAL), dimension(:,:),          allocatable        :: field_to_derivate_wks, Fwks
 
-    allocate(Derivatives_of_field(NDIM,NGLLX,NGLLY,NGLLZ,NSPEC_AB))
-    allocate(field_to_derivate_wks(NDIM,NGLOB_AB), Fwks(NDIM,NGLOB_AB))
+  integer :: ier
+
+    allocate(Derivatives_of_field(NDIM,NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 198')
+    allocate(field_to_derivate_wks(NDIM,NGLOB_AB), Fwks(NDIM,NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 199')
     call compute_first_derivatives_lagrange(Derivatives_of_field, field_to_derivate)
 
     call compute_mean_values_on_edge(Derivatives_of_field)
@@ -3881,11 +3990,14 @@ contains
     integer                                                             :: iglob, iglob_index, igll, idim, ip
     integer                                                             :: nline, ncolu
 
+  integer :: ier
 
     nline=10
 
-    allocate(valence(NDIM,NGLOB_AB),  field_to_derivate(NDIM,NGLOB_AB), &
-             field_to_send(NGLOB_AB), field_overlap(indx_recv(NPROC)), result_df(nline))
+    allocate(valence(NDIM,NGLOB_AB),  field_to_derivate(NDIM,NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 200')
+    allocate(field_to_send(NGLOB_AB), field_overlap(indx_recv(NPROC)), result_df(nline),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 201')
     valence(:,:)=1.
     field_to_derivate(:,:) = field_input(:,:)
 
@@ -3912,7 +4024,8 @@ contains
        !! 3/ process derivatives in edges by FD
        do iglob_index=1, Nb_iglob_on_faces
           ncolu=regularization_fd(iglob_index)%nReg+regularization_fd(iglob_index)%nNei
-          allocate(Values(ncolu))
+          allocate(Values(ncolu),stat=ier)
+          if (ier /= 0) call exit_MPI_without_rank('error allocating array 202')
           ip=0
           do igll=1, regularization_fd(iglob_index)%nReg
              ip = ip + 1
@@ -3961,9 +4074,13 @@ contains
     integer                                                             :: iglob, iglob_index, igll, ip
     integer                                                             :: nline, ncolu
 
+  integer :: ier
+
     nline=10
-    allocate(valence(NDIM,NGLOB_AB),  field_to_derivate(NDIM,NGLOB_AB), &
-             field_to_send(NGLOB_AB), field_overlap(indx_recv(NPROC)), result_df(nline))
+    allocate(valence(NDIM,NGLOB_AB),  field_to_derivate(NDIM,NGLOB_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 203')
+    allocate(field_to_send(NGLOB_AB), field_overlap(indx_recv(NPROC)), result_df(nline),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 204')
     valence(:,:)=1.
 
     !! need to duplicate in order to use the already build subroutine from sepcfem package : assembel_MPI..
@@ -3993,7 +4110,8 @@ contains
     !! 3/ process derivatives in edges by FD
     do iglob_index=1, Nb_iglob_on_faces
        ncolu=regularization_fd(iglob_index)%nReg+regularization_fd(iglob_index)%nNei
-       allocate(Values(ncolu))
+       allocate(Values(ncolu),stat=ier)
+       if (ier /= 0) call exit_MPI_without_rank('error allocating array 205')
        ip=0
        do igll=1, regularization_fd(iglob_index)%nReg
           ip = ip + 1
@@ -4261,13 +4379,16 @@ contains
 !!!!!!!!!!!!!!!! DEBUG subroutine !!!!!!!!!!!!!!!!!!
   subroutine write_in_disk_this(f)
 
+  integer :: ier
+
     real(kind=CUSTOM_REAL), dimension(:), allocatable :: f
     integer i,j,k,ispec, iglob
     real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: dd
     character(len=256)                                                     :: path_file, name_file
     integer itest
     itest=1
-    allocate(dd(NGLLX,NGLLY,NGLLZ,NSPEC_AB))
+    allocate(dd(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 206')
     do ispec=1,nspec_ab
        do k=1,ngllz
           do j=1,nglly
@@ -4303,11 +4424,14 @@ subroutine compute_lapalacian_of_field(field, laplacian_of_field)
   real(kind=CUSTOM_REAL),dimension(:,:,:,:,:),    allocatable                :: derivative_of_field
   real(kind=CUSTOM_REAL),dimension(:,:,:,:,:),    allocatable                :: second_derivative_of_field
 
+  integer :: ier
 
-
-  allocate(field_wkstmp(3,NGLLX, NGLLY, NGLLZ, NSPEC_AB), &
-           derivative_of_field(3,NGLLX, NGLLY, NGLLZ, NSPEC_AB), &
-           second_derivative_of_field(3,NGLLX, NGLLY, NGLLZ, NSPEC_AB) )
+  allocate(field_wkstmp(3,NGLLX, NGLLY, NGLLZ, NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 207')
+  allocate(derivative_of_field(3,NGLLX, NGLLY, NGLLZ, NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 208')
+  allocate(second_derivative_of_field(3,NGLLX, NGLLY, NGLLZ, NSPEC_AB),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 209')
 
   field_wkstmp(1,:,:,:,:) = field(:,:,:,:)
   field_wkstmp(2,:,:,:,:) = field(:,:,:,:)
@@ -4343,7 +4467,8 @@ end subroutine compute_bi_laplacian_of_field
 !!===============
 subroutine compute_derivative_with_lagrange_polynomials(derivative_of_field, field_to_derivate)
 
-   use specfem_par, only: xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz, hprime_xx
+   use specfem_par, only: xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz, hprime_xx, irregular_element_number, &
+                          xix_regular
 
    implicit none
    !! size (NDIM,NGLLX, NGLLY, NGLLZ, NSPEC_AB)
@@ -4358,7 +4483,7 @@ subroutine compute_derivative_with_lagrange_polynomials(derivative_of_field, fie
    double precision                                              :: xixl,xiyl,xizl
    double precision                                              :: etaxl,etayl,etazl
    double precision                                              :: gammaxl,gammayl,gammazl
-   integer                                                       :: ispec, i, j, k, l
+   integer                                                       :: ispec, ispec_irreg, i, j, k, l
 
 
    do ispec =1, NSPEC_AB
@@ -4372,7 +4497,7 @@ subroutine compute_derivative_with_lagrange_polynomials(derivative_of_field, fie
             enddo
          enddo
       enddo
-
+      ispec_irreg = irregular_element_number(ispec)
       !! derivative of field based on lagrange polynomials
       do k=1,NGLLZ
          do j=1,NGLLY
@@ -4396,20 +4521,29 @@ subroutine compute_derivative_with_lagrange_polynomials(derivative_of_field, fie
                   tempx3l = tempx3l + F(i,j,l)*hp3
 
                enddo
+               if (ispec_irreg /= 0 ) then !irregular element
 
-               xixl = xix(i,j,k,ispec)
-               xiyl = xiy(i,j,k,ispec)
-               xizl = xiz(i,j,k,ispec)
-               etaxl = etax(i,j,k,ispec)
-               etayl = etay(i,j,k,ispec)
-               etazl = etaz(i,j,k,ispec)
-               gammaxl = gammax(i,j,k,ispec)
-               gammayl = gammay(i,j,k,ispec)
-               gammazl = gammaz(i,j,k,ispec)
+                 xixl = xix(i,j,k,ispec_irreg)
+                 xiyl = xiy(i,j,k,ispec_irreg)
+                 xizl = xiz(i,j,k,ispec_irreg)
+                 etaxl = etax(i,j,k,ispec_irreg)
+                 etayl = etay(i,j,k,ispec_irreg)
+                 etazl = etaz(i,j,k,ispec_irreg)
+                 gammaxl = gammax(i,j,k,ispec_irreg)
+                 gammayl = gammay(i,j,k,ispec_irreg)
+                 gammazl = gammaz(i,j,k,ispec_irreg)
 
-               dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l  ! df/dx
-               dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l  ! df/dy
-               dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l  ! df/dz
+                 dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
+                 dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
+                 dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+
+               else !regular element
+
+                 dF(1,i,j,k) = xix_regular * tempx1l
+                 dF(2,i,j,k) = xix_regular * tempx2l
+                 dF(3,i,j,k) = xix_regular * tempx3l
+
+               endif
 
           enddo
        enddo
@@ -4433,7 +4567,8 @@ end subroutine compute_derivative_with_lagrange_polynomials
 !!============
 subroutine compute_2nd_derivative_with_lagrange_polynomials(derivative_of_field, field_to_derivate)
 
-   use specfem_par, only: xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz, hprime_xx
+   use specfem_par, only: xix, xiy, xiz, etax, etay, etaz, gammax, gammay, gammaz, hprime_xx,irregular_element_number, &
+                          xix_regular
 
    implicit none
    !! size (NDIM, NGLLX, NGLLY, NGLLZ, NSPEC_AB)
@@ -4450,7 +4585,7 @@ subroutine compute_2nd_derivative_with_lagrange_polynomials(derivative_of_field,
    double precision                                              :: xixl,xiyl,xizl
    double precision                                              :: etaxl,etayl,etazl
    double precision                                              :: gammaxl,gammayl,gammazl
-   integer                                                       :: ispec, i, j, k, l
+   integer                                                       :: ispec, ispec_irreg,i, j, k, l
 
    do ispec =1, NSPEC_AB
 
@@ -4464,6 +4599,7 @@ subroutine compute_2nd_derivative_with_lagrange_polynomials(derivative_of_field,
             enddo
          enddo
       enddo
+      ispec_irreg = irregular_element_number(ispec)
 
       !! derivative of field based on lagrange polynomials
       do k=1,NGLLZ
@@ -4503,20 +4639,29 @@ subroutine compute_2nd_derivative_with_lagrange_polynomials(derivative_of_field,
 
 
                enddo
+               if (ispec_irreg /= 0 ) then !irregular element
 
-               xixl = xix(i,j,k,ispec)
-               xiyl = xiy(i,j,k,ispec)
-               xizl = xiz(i,j,k,ispec)
-               etaxl = etax(i,j,k,ispec)
-               etayl = etay(i,j,k,ispec)
-               etazl = etaz(i,j,k,ispec)
-               gammaxl = gammax(i,j,k,ispec)
-               gammayl = gammay(i,j,k,ispec)
-               gammazl = gammaz(i,j,k,ispec)
+                 xixl = xix(i,j,k,ispec_irreg)
+                 xiyl = xiy(i,j,k,ispec_irreg)
+                 xizl = xiz(i,j,k,ispec_irreg)
+                 etaxl = etax(i,j,k,ispec_irreg)
+                 etayl = etay(i,j,k,ispec_irreg)
+                 etazl = etaz(i,j,k,ispec_irreg)
+                 gammaxl = gammax(i,j,k,ispec_irreg)
+                 gammayl = gammay(i,j,k,ispec_irreg)
+                 gammazl = gammaz(i,j,k,ispec_irreg)
 
-               dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l  ! (df/dx) / dx
-               dF(2,i,j,k) = xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l  ! (df/dy) / dy
-               dF(3,i,j,k) = xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l  ! (df/dz) / dz
+                 dF(1,i,j,k) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l
+                 dF(2,i,j,k) = xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l
+                 dF(3,i,j,k) = xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l
+
+               else !regular element
+
+                 dF(1,i,j,k) = xix_regular * tempx1l
+                 dF(2,i,j,k) = xix_regular * tempx2l
+                 dF(3,i,j,k) = xix_regular * tempx3l
+
+               endif
 
           enddo
        enddo
@@ -4550,6 +4695,8 @@ subroutine compute_spatial_damping_for_source_singularities(acqui_simu, inversio
    integer                                                                       :: isrc, ievent, iglob, ispec, i, j, k
    real(kind=CUSTOM_REAL)                                                        :: xgll, ygll, zgll
    real(kind=CUSTOM_REAL)                                                        :: distance_from_source, value_of_damping
+
+  integer :: ier
 
    do ispec = 1, NSPEC_AB
 
@@ -4588,7 +4735,8 @@ subroutine compute_spatial_damping_for_source_singularities(acqui_simu, inversio
    enddo
 
    if (NUMBER_OF_SIMULTANEOUS_RUNS > 1) then
-      allocate(spatial_damping_tmp(NGLLX,NGLLY,NGLLZ,NSPEC_AB))
+      allocate(spatial_damping_tmp(NGLLX,NGLLY,NGLLZ,NSPEC_AB),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 210')
       spatial_damping_tmp(:,:,:,:)=spatial_damping(:,:,:,:)
       call max_all_all_cr_for_simulatenous_runs(spatial_damping_tmp(1,1,1,1), spatial_damping(1,1,1,1), NGLLX*NGLLY*NGLLZ*NSPEC_AB)
       deallocate(spatial_damping_tmp)

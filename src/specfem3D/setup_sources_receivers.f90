@@ -38,6 +38,9 @@
   ! builds search tree
   if (.not. DO_BRUTE_FORCE_POINT_SEARCH) call setup_search_kdtree()
 
+  ! sets number of timestep parameters
+  call setup_timesteps()
+
   ! locates sources and determines simulation start time t0
   call setup_sources()
 
@@ -59,8 +62,11 @@
     write(IMAIN,*) 'Total number of samples for seismograms = ',NSTEP
     write(IMAIN,*)
     write(IMAIN,*) 'found a total of ',nrec_tot_found,' receivers in all the slices'
-    if (NSOURCES > 1) write(IMAIN,*) 'Using ',NSOURCES,' point sources'
     write(IMAIN,*)
+    if (NSOURCES > 1) then
+      write(IMAIN,*) 'Using ',NSOURCES,' point sources'
+      write(IMAIN,*)
+    endif
     call flush_IMAIN()
   endif
 
@@ -77,6 +83,51 @@
   call synchronize_all()
 
   end subroutine setup_sources_receivers
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine setup_timesteps()
+
+  use specfem_par, only: myrank,NSTEP,NSOURCES,SIMULATION_TYPE, &
+    NTSTEP_BETWEEN_OUTPUT_SEISMOS,NTSTEP_BETWEEN_READ_ADJSRC, &
+    USE_EXTERNAL_SOURCE_FILE,NSTEP_STF,NSOURCES_STF, &
+    SAVE_ALL_SEISMOS_IN_ONE_FILE
+
+  implicit none
+
+  ! subsets used to save seismograms must not be larger than the whole time series
+  if (NTSTEP_BETWEEN_OUTPUT_SEISMOS > NSTEP) NTSTEP_BETWEEN_OUTPUT_SEISMOS = NSTEP
+
+  ! subsets used to save adjoint sources must not be larger than the whole time series,
+  ! otherwise we waste memory
+  if (SIMULATION_TYPE == 2 .or. SIMULATION_TYPE == 3) then
+    if (NTSTEP_BETWEEN_READ_ADJSRC > NSTEP) NTSTEP_BETWEEN_READ_ADJSRC = NSTEP
+  endif
+
+  !! VM VM set the size of user_source_time_function
+  if (USE_EXTERNAL_SOURCE_FILE) then
+     NSTEP_STF = NSTEP
+     NSOURCES_STF = NSOURCES
+  else !! We don't need the array user_source_time_function : use a small dummy array
+     NSTEP_STF = 1
+     NSOURCES_STF = 1
+  endif
+
+  ! check
+  if (SAVE_ALL_SEISMOS_IN_ONE_FILE) then
+    ! requires to have full length of seismograms
+    if (NTSTEP_BETWEEN_OUTPUT_SEISMOS < NSTEP) then
+      if (myrank == 0) then
+        print *, 'Error: Setting SAVE_ALL_SEISMOS_IN_ONE_FILE to .true. requires NTSTEP_BETWEEN_OUTPUT_SEISMOS >= NSTEP'
+      endif
+      call exit_MPI(myrank, &
+                    'Setting SAVE_ALL_SEISMOS_IN_ONE_FILE not supported for current NTSTEP_BETWEEN_OUTPUT_SEISMOS in Par_file')
+    endif
+  endif
+
+  end subroutine setup_timesteps
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -103,49 +154,66 @@
   endif
 
   ! allocate arrays for source
-  allocate(islice_selected_source(NSOURCES), &
-           ispec_selected_source(NSOURCES), &
-           Mxx(NSOURCES), &
-           Myy(NSOURCES), &
-           Mzz(NSOURCES), &
-           Mxy(NSOURCES), &
-           Mxz(NSOURCES), &
-           Myz(NSOURCES), &
-           xi_source(NSOURCES), &
-           eta_source(NSOURCES), &
-           gamma_source(NSOURCES), &
-           tshift_src(NSOURCES), &
-           hdur(NSOURCES), &
-           hdur_Gaussian(NSOURCES), &
-           utm_x_source(NSOURCES), &
-           utm_y_source(NSOURCES), &
-           nu_source(NDIM,NDIM,NSOURCES), &
-           stat=ier)
+  allocate(islice_selected_source(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2033')
+  allocate(ispec_selected_source(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2034')
+  allocate(Mxx(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2035')
+  allocate(Myy(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2036')
+  allocate(Mzz(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2037')
+  allocate(Mxy(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2038')
+  allocate(Mxz(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2039')
+  allocate(Myz(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2040')
+  allocate(xi_source(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2041')
+  allocate(eta_source(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2042')
+  allocate(gamma_source(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2043')
+  allocate(tshift_src(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2044')
+  allocate(hdur(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2045')
+  allocate(hdur_Gaussian(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2046')
+  allocate(utm_x_source(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2047')
+  allocate(utm_y_source(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2048')
+  allocate(nu_source(NDIM,NDIM,NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2049')
   if (ier /= 0) stop 'error allocating arrays for sources'
 
   if (USE_FORCE_POINT_SOURCE) then
-    allocate(factor_force_source(NSOURCES), &
-             comp_dir_vect_source_E(NSOURCES), &
-             comp_dir_vect_source_N(NSOURCES), &
-             comp_dir_vect_source_Z_UP(NSOURCES),stat=ier)
+    allocate(factor_force_source(NSOURCES),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2050')
+    allocate(comp_dir_vect_source_E(NSOURCES),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2051')
+    allocate(comp_dir_vect_source_N(NSOURCES),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2052')
+    allocate(comp_dir_vect_source_Z_UP(NSOURCES),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2053')
   else
-    allocate(factor_force_source(1), &
-             comp_dir_vect_source_E(1), &
-             comp_dir_vect_source_N(1), &
-             comp_dir_vect_source_Z_UP(1),stat=ier)
+    allocate(factor_force_source(1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2054')
+    allocate(comp_dir_vect_source_E(1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2055')
+    allocate(comp_dir_vect_source_N(1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2056')
+    allocate(comp_dir_vect_source_Z_UP(1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2057')
   endif
   if (ier /= 0) stop 'error allocating arrays for force point sources'
 
-  !! VM VM set the size of user_source_time_function
-  if (USE_EXTERNAL_SOURCE_FILE) then
-     NSTEP_STF = NSTEP
-     NSOURCES_STF = NSOURCES
-  else !! We don't need the array user_source_time_function : use a small dummy array
-     NSTEP_STF = 1
-     NSOURCES_STF = 1
-  endif
   !! allocate the array contains the user defined source time function
   allocate(user_source_time_function(NSTEP_STF, NSOURCES_STF),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2058')
   if (ier /= 0) stop 'error allocating arrays for user sources time function'
 
   if (USE_FORCE_POINT_SOURCE) then
@@ -170,7 +238,9 @@
                      factor_force_source,comp_dir_vect_source_E,comp_dir_vect_source_N,comp_dir_vect_source_Z_UP, &
                      xi_source,eta_source,gamma_source,nu_source,user_source_time_function)
 
-  call define_stf_constants(hdur,hdur_Gaussian,tshift_src,min_tshift_src_original,islice_selected_source,ispec_selected_source,t0)
+  ! determines onset time
+  call setup_stf_constants(hdur,hdur_Gaussian,tshift_src,min_tshift_src_original, &
+                           islice_selected_source,ispec_selected_source,t0)
 
   ! count number of sources located in this slice
   nsources_local = 0
@@ -184,12 +254,60 @@
   ! prints source time functions to output files
   if (PRINT_SOURCE_TIME_FUNCTION) call print_stf_file()
 
+  call get_run_number_of_the_source()
+
   end subroutine setup_sources
+!
+!-------------------------------------------------------------------------------------------------
+!
+!EB EB When NB_RUNS_ACOUSTIC_GPU > 1, the file SOURCE_FILE actually contains the sources for all the runs.
+!This routine is intended to get the array that contains the run number of each source described in SOURCE_FILE.
+!The line i of the file run_number_of_the_source contains the run number \in [ 0;NB_RUNS_ACOUSTIC_GPU-1] of the source i
+  subroutine get_run_number_of_the_source()
+
+  use constants
+  use specfem_par, only: run_number_of_the_source,NSOURCES
+  character(len=MAX_STRING_LEN) :: filename,string
+  integer :: ier,isource,icounter
+
+  allocate(run_number_of_the_source(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2059')
+
+  if (NB_RUNS_ACOUSTIC_GPU == 1) then
+    run_number_of_the_source(:) = 0
+  else
+
+    filename = IN_DATA_FILES(1:len_trim(IN_DATA_FILES))//'run_number_of_the_source'
+    open(unit=IIN,file=filename,status='old',action='read',iostat=ier)
+    if (ier /= 0) then
+      print *,'Error opening file: ',filename
+      stop 'Error opening run_number_of_the_source file'
+    endif
+
+    ! Checks if the number of lines is correct
+    icounter = 0
+    do while (ier == 0)
+      read(IIN,"(a)",iostat=ier) string
+      if (ier == 0) icounter = icounter + 1
+    enddo
+    close(IIN)
+    if (icounter /= NSOURCES) stop 'Error total number of lines in run_number_of_the_source file is not equal to NSOURCES'
+
+    ! Fills the array run_number_of_the_source
+    open(unit=IIN,file=filename,status='old',action='read')
+    ! reads run number for each source
+    do isource = 1,NSOURCES
+      read(IIN,"(a)") string
+      read(string,*) run_number_of_the_source(isource)
+    enddo
+  endif
+
+  end subroutine get_run_number_of_the_source
 
 !
 !-------------------------------------------------------------------------------------------------
 !
-  subroutine define_stf_constants(hdur,hdur_Gaussian,tshift_src,min_tshift_src_original, &
+  subroutine setup_stf_constants(hdur,hdur_Gaussian,tshift_src,min_tshift_src_original, &
                                   islice_selected_source,ispec_selected_source,t0)
 
   use constants
@@ -203,11 +321,17 @@
   double precision, dimension(NSOURCES) :: tshift_src,hdur,hdur_Gaussian
   double precision :: min_tshift_src_original,t0
   integer, dimension(NSOURCES) :: islice_selected_source,ispec_selected_source
-  !local
+
+  ! local parameters
   double precision :: t0_acoustic
   integer :: isource,ispec
 
-  if (abs(minval(tshift_src)) > TINYVAL) call exit_MPI(myrank,'one tshift_src must be zero, others must be positive')
+  if (abs(minval(tshift_src)) > TINYVAL) then
+!! DK DK this should be a warning, not an error; I thus changed it; users can decide to do this purposely
+!! DK DK (in particular for applications outside of seismology, e.g. in imaging or in non-destructive testing)
+!   call exit_MPI(myrank,'one tshift_src must be zero, others must be positive')
+    write(IMAIN,*) 'INFORMATION: no tshift_src is equal to zero, thus the origin time is not t0, it is changed by tshift_src'
+  endif
 
   ! filter source time function by Gaussian with hdur = HDUR_MOVIE when outputing movies or shakemaps
   if (MOVIE_SURFACE .or. MOVIE_VOLUME .or. CREATE_SHAKEMAP) then
@@ -326,7 +450,7 @@
     call exit_mpi(myrank,'error negative USER_T0 parameter in constants.h')
   endif
 
-  end subroutine define_stf_constants
+  end subroutine setup_stf_constants
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -471,15 +595,22 @@
   endif
 
   ! allocate memory for receiver arrays, i.e. stations given in STATIONS file
-  allocate(islice_selected_rec(nrec), &
-           ispec_selected_rec(nrec), &
-           xi_receiver(nrec), &
-           eta_receiver(nrec), &
-           gamma_receiver(nrec), &
-           station_name(nrec), &
-           network_name(nrec), &
-           nu(NDIM,NDIM,nrec), &
-           stat=ier)
+  allocate(islice_selected_rec(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2060')
+  allocate(ispec_selected_rec(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2061')
+  allocate(xi_receiver(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2062')
+  allocate(eta_receiver(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2063')
+  allocate(gamma_receiver(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2064')
+  allocate(station_name(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2065')
+  allocate(network_name(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2066')
+  allocate(nu(NDIM,NDIM,nrec), stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2067')
   if (ier /= 0) stop 'error allocating arrays for receivers'
 
   ! locate receivers in the mesh
@@ -636,14 +767,34 @@
   double precision, dimension(NGLLY) :: hetas,hpetas
   double precision, dimension(NGLLZ) :: hgammas,hpgammas
   double precision :: norm,comp_x,comp_y,comp_z
-
+  double precision :: sizeval
   logical :: does_source_encoding
+
+  ! user output info
+  ! sources
+  if (SIMULATION_TYPE == 1 .or. SIMULATION_TYPE == 3) then
+    ! user output
+    if (myrank == 0) then
+      ! note: all process allocate the full sourcearrays array
+      ! sourcearrays(NDIM,NGLLX,NGLLY,NGLLZ,NSOURCES)
+      sizeval = dble(NSOURCES) * dble(NDIM * NGLLX * NGLLY * NGLLZ * CUSTOM_REAL / 1024. / 1024. )
+      ! outputs info
+      write(IMAIN,*) 'source arrays:'
+      write(IMAIN,*) '  number of sources is ',NSOURCES
+      write(IMAIN,*) '  size of source array                 = ', sngl(sizeval),'MB'
+      write(IMAIN,*) '                                       = ', sngl(sizeval/1024.d0),'GB'
+      write(IMAIN,*)
+      call flush_IMAIN()
+    endif
+  endif
 
   ! for source encoding (acoustic sources only so far)
   if (USE_SOURCE_ENCODING) then
     allocate(pm1_source_encoding(NSOURCES),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2068')
   else
     allocate(pm1_source_encoding(1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2069')
   endif
   if (ier /= 0) stop 'error allocating arrays for sources'
   pm1_source_encoding(:) = 1._CUSTOM_REAL
@@ -651,12 +802,17 @@
 
   ! forward simulations
   if (SIMULATION_TYPE == 1 .or. SIMULATION_TYPE == 3) then
-    allocate(sourcearray(NDIM,NGLLX,NGLLY,NGLLZ), &
-             sourcearrays(NSOURCES,NDIM,NGLLX,NGLLY,NGLLZ),stat=ier)
+    allocate(sourcearray(NDIM,NGLLX,NGLLY,NGLLZ),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2070')
+    allocate(sourcearrays(NSOURCES,NDIM,NGLLX,NGLLY,NGLLZ),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2071')
     if (ier /= 0) stop 'error allocating array sourcearray'
 
     ! compute source arrays
     do isource = 1,NSOURCES
+
+      ! initializes
+      sourcearray(:,:,:,:) = ZERO
 
       !   check that the source slice number is okay
       if (islice_selected_source(isource) < 0 .or. islice_selected_source(isource) > NPROC-1) &
@@ -672,13 +828,16 @@
         call lagrange_any(eta_source(isource),NGLLY,yigll,hetas,hpetas)
         call lagrange_any(gamma_source(isource),NGLLZ,zigll,hgammas,hpgammas)
 
-        if (USE_FORCE_POINT_SOURCE) then ! use of FORCESOLUTION files
-
+        if (USE_FORCE_POINT_SOURCE) then
+          ! use of FORCESOLUTION files
+          !
           ! note: for use_force_point_source xi/eta/gamma are also in the range [-1,1], for exact positioning
-
           factor_source = factor_force_source(isource)
-          ! elastic source
-          if (ispec_is_elastic(ispec)) then
+
+          ! elastic sources
+          ! note: point forces in poroelastic element act on both, solid and fluid parts (see compute_add_sources_poroelastic)
+          !       we allow thus the force to have a given direction.
+          if (ispec_is_elastic(ispec) .or. ispec_is_poroelastic(ispec)) then
             ! length of component vector
             norm = dsqrt( comp_dir_vect_source_E(isource)**2 &
                         + comp_dir_vect_source_N(isource)**2 &
@@ -691,41 +850,47 @@
             comp_x = comp_dir_vect_source_E(isource)/norm
             comp_y = comp_dir_vect_source_N(isource)/norm
             comp_z = comp_dir_vect_source_Z_UP(isource)/norm
+            call compute_arrays_source_forcesolution(sourcearray,hxis,hetas,hgammas,factor_source, &
+                                                     comp_x,comp_y,comp_z,nu_source(:,:,isource))
           endif
 
+          ! acoustic sources
+          if (ispec_is_acoustic(ispec)) then
+            ! dipole
+            if (DIPOLE_SOURCE_IN_FLUID) then
+              ! length of component vector
+              norm = dsqrt( comp_dir_vect_source_E(isource)**2 &
+                          + comp_dir_vect_source_N(isource)**2 &
+                          + comp_dir_vect_source_Z_UP(isource)**2 )
+              comp_x = comp_dir_vect_source_E(isource)/norm
+              comp_y = comp_dir_vect_source_N(isource)/norm
+              comp_z = comp_dir_vect_source_Z_UP(isource)/norm
+              write(*,*) " DIPOLE FLUID ", comp_x, comp_y, comp_z
+              call compute_arrays_source_forcesolution_fluid(ispec, sourcearray, hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
+                                                             factor_source,comp_x,comp_y,comp_z,nu_source(:,:,isource))
+            else
+              ! point force
+              ! identical source array components in x,y,z-direction
+              ! source array interpolated on all element GLL points
+              ! we use an tilted force defined by its magnitude and the projections
+              ! of an arbitrary (non-unitary) direction vector on the E/N/Z_UP basis
+              comp_x = 1.0d0
+              comp_y = 1.0d0
+              comp_z = 1.0d0
+              call compute_arrays_source_forcesolution(sourcearray,hxis,hetas,hgammas,factor_source, &
+                                                       comp_x,comp_y,comp_z,nu_source(:,:,isource))
+            endif
+          endif ! acoustic
 
-          if (ispec_is_acoustic(ispec) .and. DIPOLE_SOURCE_IN_FLUID) then
-             ! length of component vector
-             norm = dsqrt( comp_dir_vect_source_E(isource)**2 &
-                  + comp_dir_vect_source_N(isource)**2 &
-                  + comp_dir_vect_source_Z_UP(isource)**2 )
-             comp_x = comp_dir_vect_source_E(isource)/norm
-             comp_y = comp_dir_vect_source_N(isource)/norm
-             comp_z = comp_dir_vect_source_Z_UP(isource)/norm
-             write(*,*) " DIPOLE FLUID ", comp_x, comp_y, comp_z
-            call compute_arrays_source_forcesolution_fluid(ispec, sourcearray, hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
-                 factor_source,comp_x,comp_y,comp_z,nu_source(:,:,isource),xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz,NSPEC_AB)
-          else
-           ! acoustic source
-           ! identical source array components in x,y,z-direction
-           ! source array interpolated on all element GLL points
-           ! we use an tilted force defined by its magnitude and the projections
-           ! of an arbitrary (non-unitary) direction vector on the E/N/Z_UP basis
-           comp_x = 1.0d0
-           comp_y = 1.0d0
-           comp_z = 1.0d0
-           call compute_arrays_source_forcesolution(sourcearray,hxis,hetas,hgammas,factor_source, &
-                                                   comp_x,comp_y,comp_z,nu_source(:,:,isource))
-          endif
-        else ! use of CMTSOLUTION files
+        else
+          ! use of CMTSOLUTION files
 
           ! elastic or poroelastic moment tensor source
           if (ispec_is_elastic(ispec) .or. ispec_is_poroelastic(ispec)) then
             call compute_arrays_source_cmt(ispec,sourcearray, &
                                            hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
                                            Mxx(isource),Myy(isource),Mzz(isource), &
-                                           Mxy(isource),Mxz(isource),Myz(isource), &
-                                           xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz,NSPEC_AB)
+                                           Mxy(isource),Mxz(isource),Myz(isource))
           endif
 
           ! acoustic case
@@ -741,11 +906,8 @@
             factor_source = factor_source * sqrt(2.0) / sqrt(3.0)
 
             ! source encoding
-            comp_x = 1.0d0
             ! determines factor +/-1 depending on sign of moment tensor
-            comp_y = 1.0d0
             ! (see e.g. Krebs et al., 2009. Fast full-wavefield seismic inversion using encoded sources,
-            comp_z = 1.0d0
             !   Geophysics, 74 (6), WCC177-WCC188.)
             if (USE_SOURCE_ENCODING) then
               pm1_source_encoding(isource) = sign(1.0d0,Mxx(isource))
@@ -772,6 +934,7 @@
     ! SIMULATION_TYPE == 2
     ! allocate dummy array (needed for subroutine calls)
     allocate(sourcearrays(1,1,1,1,1),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2072')
     if (ier /= 0) stop 'error allocating dummy sourcearrays'
   endif
 
@@ -798,35 +961,44 @@
           ! updates counter
           nadj_rec_local = nadj_rec_local + 1
 
-          ! checks **net**.**sta**.**BH**.adj files for correct number of time steps
-          adj_source_file = trim(network_name(irec))//'.'//trim(station_name(irec))
+          if (.not. READ_ADJSRC_ASDF) then
+            ! checks **net**.**sta**.**BH**.adj files for correct number of time steps
+            adj_source_file = trim(network_name(irec))//'.'//trim(station_name(irec))
 
-          ! loops over file components E/N/Z
-          do icomp = 1,NDIM
-            filename = OUTPUT_FILES(1:len_trim(OUTPUT_FILES))// &
+            ! loops over file components E/N/Z
+            do icomp = 1,NDIM
+              filename = OUTPUT_FILES(1:len_trim(OUTPUT_FILES))// &
                        '/../SEM/'//trim(adj_source_file) // '.'// comp(icomp) // '.adj'
-            open(unit=IIN,file=trim(filename),status='old',action='read',iostat=ier)
-            if (ier == 0) then
-              ! checks length of file
-              itime = 0
-              do while (ier == 0)
-                read(IIN,*,iostat=ier) junk,junk
-                if (ier == 0) itime = itime + 1
-              enddo
+              open(unit=IIN,file=trim(filename),status='old',action='read',iostat=ier)
+              if (ier == 0) then
+                ! checks length of file
+                itime = 0
+                do while (ier == 0)
+                  read(IIN,*,iostat=ier) junk,junk
+                  if (ier == 0) itime = itime + 1
+                enddo
 
-              ! checks length
-              if (itime /= NSTEP) then
-                print *,'adjoint source error: ',trim(filename),' has length',itime,' but should be',NSTEP
-                call exit_MPI(myrank, &
-                  'file '//trim(filename)//' has wrong length, please check your adjoint sources and your simulation duration')
+                ! checks length
+                if (itime /= NSTEP) then
+                  print *,'adjoint source error: ',trim(filename),' has length',itime,' but should be',NSTEP
+                  call exit_MPI(myrank, &
+                    'file '//trim(filename)//' has wrong length, please check your adjoint sources and your simulation duration')
+                endif
+
+                ! updates counter for found files
+                nadj_files_found = nadj_files_found + 1
               endif
-
-              ! updates counter for found files
-              nadj_files_found = nadj_files_found + 1
-            endif
-            ! closes file
-            close(IIN)
-          enddo
+              ! closes file
+              close(IIN)
+            enddo
+          else
+            adj_source_file = trim(network_name(irec))//'_'//trim(station_name(irec))
+            do icomp = 1,NDIM
+              filename = trim(adj_source_file) // '_'// comp(icomp)
+              call check_adjoint_sources_asdf(filename)
+            enddo
+            nadj_files_found = nadj_files_found + 1
+          endif
         endif
       enddo
 
@@ -860,7 +1032,8 @@
 
     ! initializes adjoint sources
 
-    allocate(source_adjoint(nadj_rec_local,NTSTEP_BETWEEN_READ_ADJSRC,NDIM),stat=ier)
+    allocate(source_adjoint(NDIM,nadj_rec_local,NTSTEP_BETWEEN_READ_ADJSRC),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2073')
     if (ier /= 0) stop 'error allocating array source_adjoint'
 
     ! note:
@@ -885,6 +1058,12 @@
     endif
   endif
 
+  ! frees dynamically allocated memory
+  deallocate(factor_force_source)
+  deallocate(comp_dir_vect_source_E)
+  deallocate(comp_dir_vect_source_N)
+  deallocate(comp_dir_vect_source_Z_UP)
+
   end subroutine setup_sources_precompute_arrays
 
 !
@@ -896,25 +1075,94 @@
   use specfem_par
   implicit none
 
+  ! local parameters
   integer :: irec,irec_local,isource,ier
+  integer,dimension(0:NPROC-1) :: tmp_rec_local_all
+  integer :: maxrec,maxproc(1)
+  double precision :: sizeval
+
+  ! statistics about allocation memory for seismograms & source_adjoint
+  ! seismograms
+  ! gather from slaves on master
+  call gather_all_singlei(nrec_local,tmp_rec_local_all,NPROC)
+  ! user output
+  if (myrank == 0) then
+    ! determines maximum number of local receivers and corresponding rank
+    maxrec = maxval(tmp_rec_local_all(:))
+    ! note: MAXLOC will determine the lower bound index as '1'.
+    maxproc = maxloc(tmp_rec_local_all(:)) - 1
+    ! seismograms array size in MB
+    if (SIMULATION_TYPE == 1 .or. SIMULATION_TYPE == 3) then
+      ! seismograms need seismograms(NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS)
+      sizeval = dble(maxrec) * dble(NDIM * NTSTEP_BETWEEN_OUTPUT_SEISMOS * CUSTOM_REAL / 1024. / 1024. )
+    else
+      ! adjoint seismograms need seismograms(NDIM*NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS)
+      sizeval = dble(maxrec) * dble(NDIM * NDIM * NTSTEP_BETWEEN_OUTPUT_SEISMOS * CUSTOM_REAL / 1024. / 1024. )
+    endif
+    ! outputs info
+    write(IMAIN,*) 'seismograms:'
+    if (WRITE_SEISMOGRAMS_BY_MASTER) then
+      write(IMAIN,*) '  seismograms written by master process only'
+    else
+      write(IMAIN,*) '  seismograms written by all processes'
+    endif
+    write(IMAIN,*) '  writing out seismograms at every NTSTEP_BETWEEN_OUTPUT_SEISMOS = ',NTSTEP_BETWEEN_OUTPUT_SEISMOS
+    write(IMAIN,*) '  maximum number of local receivers is ',maxrec,' in slice ',maxproc(1)
+    write(IMAIN,*) '  size of maximum seismogram array       = ', sngl(sizeval),'MB'
+    write(IMAIN,*) '                                         = ', sngl(sizeval/1024.d0),'GB'
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
+
+  ! adjoint sources
+  if (SIMULATION_TYPE == 2 .or. SIMULATION_TYPE == 3) then
+    ! gather from slaves on master
+    call gather_all_singlei(nadj_rec_local,tmp_rec_local_all,NPROC)
+    ! user output
+    if (myrank == 0) then
+      ! determines maximum number of local receivers and corresponding rank
+      maxrec = maxval(tmp_rec_local_all(:))
+      ! note: MAXLOC will determine the lower bound index as '1'.
+      maxproc = maxloc(tmp_rec_local_all(:)) - 1
+      ! source_adjoint size in MB
+      !source_adjoint(NDIM,nadj_rec_local,NTSTEP_BETWEEN_READ_ADJSRC)
+      sizeval = dble(maxrec) * dble(NDIM * NTSTEP_BETWEEN_READ_ADJSRC * CUSTOM_REAL / 1024. / 1024. )
+      ! outputs info
+      write(IMAIN,*) 'adjoint source arrays:'
+      write(IMAIN,*) '  reading adjoint sources at every NTSTEP_BETWEEN_READ_ADJSRC = ',NTSTEP_BETWEEN_READ_ADJSRC
+      write(IMAIN,*) '  maximum number of local adjoint sources is ',maxrec,' in slice ',maxproc(1)
+      write(IMAIN,*) '  size of maximum adjoint source array = ', sngl(sizeval),'MB'
+      write(IMAIN,*) '                                       = ', sngl(sizeval/1024.d0),'GB'
+      write(IMAIN,*)
+      call flush_IMAIN()
+    endif
+  endif
+
 
   ! needs to be allocate for subroutine calls (even if nrec_local == 0)
   allocate(number_receiver_global(nrec_local),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2074')
   if (ier /= 0) stop 'error allocating array number_receiver_global'
 
   ! stores local receivers interpolation factors
   if (nrec_local > 0) then
     ! allocate Lagrange interpolators for receivers
-    allocate(hxir_store(nrec_local,NGLLX), &
-             hetar_store(nrec_local,NGLLY), &
-             hgammar_store(nrec_local,NGLLZ),stat=ier)
+    allocate(hxir_store(nrec_local,NGLLX),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2075')
+    allocate(hetar_store(nrec_local,NGLLY),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2076')
+    allocate(hgammar_store(nrec_local,NGLLZ),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2077')
     if (ier /= 0) stop 'error allocating array hxir_store etc.'
 
     ! allocates derivatives
     if (SIMULATION_TYPE == 2) then
-      allocate(hpxir_store(nrec_local,NGLLX), &
-               hpetar_store(nrec_local,NGLLY), &
-               hpgammar_store(nrec_local,NGLLZ),stat=ier)
+      allocate(hpxir_store(nrec_local,NGLLX),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2078')
+      allocate(hpetar_store(nrec_local,NGLLY),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2079')
+      allocate(hpgammar_store(nrec_local,NGLLZ),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2080')
       if (ier /= 0) stop 'error allocating array hpxir_store'
     endif
 
@@ -971,18 +1219,84 @@
   else
     ! VM VM need to allocate Lagrange interpolators for receivers with 0 because it is used
     ! in calling subroutines parmeters. (otherwise it can be crash at runtime).
-    allocate(hxir_store(nrec_local,NGLLX), &
-             hetar_store(nrec_local,NGLLY), &
-             hgammar_store(nrec_local,NGLLZ),stat=ier)
+    allocate(hxir_store(nrec_local,NGLLX),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2081')
+    allocate(hetar_store(nrec_local,NGLLY),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2082')
+    allocate(hgammar_store(nrec_local,NGLLZ),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 2083')
     if (ier /= 0) stop 'error allocating array hxir_store etc.'
     ! allocates derivatives
     if (SIMULATION_TYPE == 2) then
-      allocate(hpxir_store(nrec_local,NGLLX), &
-               hpetar_store(nrec_local,NGLLY), &
-               hpgammar_store(nrec_local,NGLLZ),stat=ier)
+      allocate(hpxir_store(nrec_local,NGLLX),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2084')
+      allocate(hpetar_store(nrec_local,NGLLY),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2085')
+      allocate(hpgammar_store(nrec_local,NGLLZ),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2086')
       if (ier /= 0) stop 'error allocating array hpxir_store'
     endif
   endif ! nrec_local > 0
+
+  ! seismograms
+  if (nrec_local > 0) then
+    ! allocate seismogram array
+    if (SAVE_SEISMOGRAMS_DISPLACEMENT) then
+      allocate(seismograms_d(NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2087')
+    else
+      allocate(seismograms_d(1,1,1),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2088')
+    endif
+    if (ier /= 0) stop 'error allocating array seismograms_d'
+
+    if (SAVE_SEISMOGRAMS_VELOCITY) then
+      allocate(seismograms_v(NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2089')
+    else
+      allocate(seismograms_v(1,1,1),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2090')
+    endif
+    if (ier /= 0) stop 'error allocating array seismograms_v'
+
+    if (SAVE_SEISMOGRAMS_ACCELERATION) then
+      allocate(seismograms_a(NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2091')
+    else
+      allocate(seismograms_a(1,1,1),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2092')
+    endif
+    if (ier /= 0) stop 'error allocating array seismograms_a'
+
+    if (SAVE_SEISMOGRAMS_PRESSURE) then
+      !NB_RUNS_ACOUSTIC_GPU is set to 1 by default in constants.h
+      allocate(seismograms_p(NDIM,nrec_local*NB_RUNS_ACOUSTIC_GPU,NTSTEP_BETWEEN_OUTPUT_SEISMOS),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2093')
+    else
+      allocate(seismograms_p(1,1,1),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2094')
+    endif
+    if (ier /= 0) stop 'error allocating array seismograms_p'
+
+    ! initialize seismograms
+    seismograms_d(:,:,:) = 0._CUSTOM_REAL
+    seismograms_v(:,:,:) = 0._CUSTOM_REAL
+    seismograms_a(:,:,:) = 0._CUSTOM_REAL
+    seismograms_p(:,:,:) = 0._CUSTOM_REAL
+  endif
+
+  ! seismograms
+  if (SIMULATION_TYPE == 2) then
+    if (nrec_local > 0) then
+      allocate(seismograms_eps(NDIM,NDIM,nrec_local,NSTEP),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 2095')
+      if (ier /= 0) stop 'error allocating array seismograms_eps'
+      seismograms_eps(:,:,:,:) = 0._CUSTOM_REAL
+    endif
+  endif
+  ! adjoint seismograms writing
+  it_adj_written = 0
+
 
   end subroutine setup_receivers_precompute_intp
 
@@ -1172,8 +1486,10 @@
 
   ! allocates tree arrays
   allocate(kdtree_nodes_location(NDIM,kdtree_num_nodes),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2096')
   if (ier /= 0) stop 'Error allocating kdtree_nodes_location arrays'
   allocate(kdtree_nodes_index(kdtree_num_nodes),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 2097')
   if (ier /= 0) stop 'Error allocating kdtree_nodes_index arrays'
 
   ! tree verbosity

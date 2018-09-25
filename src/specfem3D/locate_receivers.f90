@@ -56,11 +56,11 @@
   double precision, allocatable, dimension(:) :: x_target,y_target,z_target
   double precision, allocatable, dimension(:) :: x_found,y_found,z_found
 
-  integer :: irec
+  integer :: irec,ier,i
 
   ! timer MPI
   double precision, external :: wtime
-  double precision :: time_start,tCPU
+  double precision :: tstart,tCPU
 
   ! use dynamic allocation
   double precision, dimension(:), allocatable :: final_distance
@@ -69,8 +69,6 @@
   ! receiver information
   ! station information for writing the seismograms
   double precision, allocatable, dimension(:) :: stlat,stlon,stele,stbur,stutm_x,stutm_y,elevation
-
-  integer :: ier
 
   ! SU_FORMAT parameters
   double precision :: llat,llon,lele,lbur
@@ -89,6 +87,8 @@
   double precision :: x,y,z,x_new,y_new,z_new
   double precision :: xi,eta,gamma,final_distance_squared
   double precision, dimension(NDIM,NDIM) :: nu_found
+  double precision, dimension(NDIM) :: nu_tmp ! to avoid intel compiler warning about temporary array in i/o routine
+
   integer :: ispec_found,idomain_found
 
   ! subset arrays
@@ -98,11 +98,13 @@
   double precision, dimension(NDIM,NDIM,NREC_SUBSET_MAX) :: nu_subset
   integer, dimension(NREC_SUBSET_MAX) :: ispec_selected_rec_subset,idomain_subset
   integer :: nrec_subset_current_size,irec_in_this_subset,irec_already_done
+  integer :: length_station_name,length_network_name
+  integer, allocatable, dimension(:) :: station_duplet
 
   logical :: is_done_stations
 
   ! get MPI starting time
-  time_start = wtime()
+  tstart = wtime()
 
   ! user output
   if (myrank == 0) then
@@ -113,6 +115,10 @@
     write(IMAIN,*)
     write(IMAIN,'(1x,a,a,a)') 'reading receiver information from ', trim(rec_filename), ' file'
     write(IMAIN,*)
+    if (USE_SOURCES_RECEIVERS_Z) then
+      write(IMAIN,*) 'using sources/receivers Z:'
+      write(IMAIN,*) '  (depth) becomes directly (z) coordinate'
+    endif
     call flush_IMAIN()
   endif
 
@@ -131,21 +137,36 @@
   endif
 
   ! allocate memory for arrays using number of stations
-  allocate(stlat(nrec), &
-           stlon(nrec), &
-           stele(nrec), &
-           stbur(nrec), &
-           stutm_x(nrec), &
-           stutm_y(nrec), &
-           elevation(nrec), &
-           x_target(nrec), &
-           y_target(nrec), &
-           z_target(nrec), &
-           x_found(nrec), &
-           y_found(nrec), &
-           z_found(nrec), &
-           final_distance(nrec), &
-           idomain(nrec),stat=ier)
+  allocate(stlat(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1955')
+  allocate(stlon(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1956')
+  allocate(stele(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1957')
+  allocate(stbur(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1958')
+  allocate(stutm_x(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1959')
+  allocate(stutm_y(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1960')
+  allocate(elevation(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1961')
+  allocate(x_target(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1962')
+  allocate(y_target(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1963')
+  allocate(z_target(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1964')
+  allocate(x_found(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1965')
+  allocate(y_found(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1966')
+  allocate(z_found(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1967')
+  allocate(final_distance(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1968')
+  allocate(idomain(nrec),stat=ier)
+  if (ier /= 0) call exit_MPI_without_rank('error allocating array 1969')
   if (ier /= 0) stop 'Error allocating arrays for locating receivers'
 
   ! loop on all the stations to read the file
@@ -160,6 +181,43 @@
     enddo
     ! close receiver file
     close(IIN)
+
+    ! In case that the same station and network name appear twice (or more times) in the STATIONS
+    ! file, problems occur, as two (or more) seismograms are written (with mode
+    ! "append") to a file with same name. The philosophy here is to accept multiple
+    ! appearances and to just add a count to the station name in this case.
+    allocate(station_duplet(nrec),stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 1970')
+    if (ier /= 0 ) call exit_MPI(myrank,'Error allocating station_duplet array')
+    station_duplet(:) = 0
+    do irec = 1,nrec
+      do i = 1,irec-1
+        if ((station_name(irec) == station_name(i)) .and. (network_name(irec) == network_name(i))) then
+            station_duplet(i) = station_duplet(i) + 1
+            if (len_trim(station_name(irec)) <= MAX_LENGTH_STATION_NAME-3) then
+              write(station_name(irec),"(a,'_',i2.2)") trim(station_name(irec)),station_duplet(i)+1
+            else
+              call exit_MPI(myrank,'Please increase MAX_LENGTH_STATION_NAME by at least 3 to name station duplets')
+            endif
+        endif
+      enddo
+
+      ! checks name lengths
+      length_station_name = len_trim(station_name(irec))
+      length_network_name = len_trim(network_name(irec))
+      ! check that length conforms to standard
+      if (length_station_name < 1 .or. length_station_name > MAX_LENGTH_STATION_NAME) then
+        print *, 'Error: invalid station name ',trim(station_name(irec))
+        call exit_MPI(myrank,'wrong length of station name')
+      endif
+      if (length_network_name < 1 .or. length_network_name > MAX_LENGTH_NETWORK_NAME) then
+        print *, 'Error: invalid network name ',trim(network_name(irec))
+        call exit_MPI(myrank,'wrong length of network name')
+      endif
+
+    enddo
+    deallocate(station_duplet)
+
   endif
 
   ! broadcast values to other slices
@@ -319,9 +377,12 @@
         write(IMAIN,*) '     gamma = ',gamma_receiver(irec)
 
         write(IMAIN,*) '     rotation matrix: '
-        write(IMAIN,*) '     nu1 = ',nu(1,:,irec)
-        write(IMAIN,*) '     nu2 = ',nu(2,:,irec)
-        write(IMAIN,*) '     nu3 = ',nu(3,:,irec)
+        nu_tmp(:) = nu(1,:,irec)
+        write(IMAIN,*) '     nu1 = ',sngl(nu_tmp)
+        nu_tmp(:) = nu(2,:,irec)
+        write(IMAIN,*) '     nu2 = ',sngl(nu_tmp)
+        nu_tmp(:) = nu(3,:,irec)
+        write(IMAIN,*) '     nu3 = ',sngl(nu_tmp)
 
         if (SUPPRESS_UTM_PROJECTION) then
           write(IMAIN,*) '     x: ',x_found(irec)
@@ -384,7 +445,7 @@
     if (SU_FORMAT) call write_stations_for_next_run()
 
     ! elapsed time since beginning of mesh generation
-    tCPU = wtime() - time_start
+    tCPU = wtime() - tstart
     write(IMAIN,*)
     write(IMAIN,*) 'Elapsed time for receiver detection in seconds = ',tCPU
     write(IMAIN,*)
@@ -453,7 +514,8 @@ contains
         write(IMAIN,*) 'station details from SU_stations_info.bin'
         call flush_IMAIN()
 
-        allocate(x_found(nrec),y_found(nrec),z_found(nrec))
+        allocate(x_found(nrec),y_found(nrec),z_found(nrec),stat=ier)
+        if (ier /= 0) call exit_MPI_without_rank('error allocating array 1971')
         ! reads in station infos
         read(IOUT_SU) islice_selected_rec,ispec_selected_rec
         read(IOUT_SU) xi_receiver,eta_receiver,gamma_receiver
@@ -484,7 +546,7 @@ contains
       ! user output
       if (myrank == 0) then
         ! elapsed time since beginning of mesh generation
-        tCPU = wtime() - time_start
+        tCPU = wtime() - tstart
         write(IMAIN,*)
         write(IMAIN,*) 'Elapsed time for receiver detection in seconds = ',tCPU
         write(IMAIN,*)

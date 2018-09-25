@@ -430,7 +430,7 @@ realw get_device_array_maximum_value(realw* array, int size){
 /* ----------------------------------------------------------------------------------------------- */
 
 
-__global__ void get_maximum_kernel(realw* array, int size, realw* d_max){
+__global__ void get_maximum_kernel(field* array, int size, realw* d_max){
 
   /* simplest version: uses only 1 thread
    realw max;

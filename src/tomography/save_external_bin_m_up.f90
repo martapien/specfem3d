@@ -32,9 +32,7 @@
 ! reads max_nibool_interfaces_ext_mesh instead of max_interface_size_ext_mesh
 
   subroutine save_external_bin_m_up(nspec,nglob, &
-                    xixstore,xiystore,xizstore,etaxstore,etaystore,etazstore, &
-                    gammaxstore,gammaystore,gammazstore, &
-                    jacobianstore, rho_vp,rho_vs,qmu_attenuation_store, &
+                    rho_vp,rho_vs,qmu_attenuation_store, &
                     rhostore,kappastore,mustore, &
                     rmass,rmass_acoustic,rmass_solid_poroelastic,rmass_fluid_poroelastic, &
                     APPROXIMATE_OCEAN_LOAD,rmass_ocean_load,NGLOB_OCEAN, &
@@ -58,7 +56,8 @@
 
   use constants
 
-  use specfem_par, only: ispec_is_inner,ATTENUATION
+  use specfem_par, only: NSPEC_IRREGULAR,ispec_is_inner,ATTENUATION,xix,xiy,xiz, &
+            etax,etay,etaz,gammax,gammay,gammaz,jacobian,irregular_element_number,xix_regular,jacobian_regular
 
   use specfem_par_elastic, only: rmassx,rmassy,rmassz, &
     nspec_inner_elastic,nspec_outer_elastic,num_phase_ispec_elastic,phase_ispec_inner_elastic, &
@@ -76,9 +75,6 @@
 
   integer :: nspec,nglob
 
-! jacobian
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec) :: xixstore,xiystore,xizstore, &
-            etaxstore,etaystore,etazstore,gammaxstore,gammaystore,gammazstore,jacobianstore
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec) :: rho_vp,rho_vs
 
 ! attenuation
@@ -154,6 +150,7 @@
 
   write(IOUT) nspec
   write(IOUT) nglob
+  write(IOUT) NSPEC_IRREGULAR
 
   write(IOUT) ibool
 
@@ -161,16 +158,20 @@
   write(IOUT) ystore_dummy
   write(IOUT) zstore_dummy
 
-  write(IOUT) xixstore
-  write(IOUT) xiystore
-  write(IOUT) xizstore
-  write(IOUT) etaxstore
-  write(IOUT) etaystore
-  write(IOUT) etazstore
-  write(IOUT) gammaxstore
-  write(IOUT) gammaystore
-  write(IOUT) gammazstore
-  write(IOUT) jacobianstore
+  write(IOUT) irregular_element_number
+  write(IOUT) xix_regular
+  write(IOUT) jacobian_regular
+
+  write(IOUT) xix
+  write(IOUT) xiy
+  write(IOUT) xiz
+  write(IOUT) etax
+  write(IOUT) etay
+  write(IOUT) etaz
+  write(IOUT) gammax
+  write(IOUT) gammay
+  write(IOUT) gammaz
+  write(IOUT) jacobian
 
   write(IOUT) kappastore
   write(IOUT) mustore
@@ -346,7 +347,9 @@
     write(27) ibool
     close(27)
 
-    allocate( v_tmp(NGLLX,NGLLY,NGLLZ,nspec), stat=ier); if (ier /= 0) stop 'error allocating array '
+    allocate(v_tmp(NGLLX,NGLLY,NGLLZ,nspec), stat=ier)
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array 1043')
+    if (ier /= 0) call exit_MPI_without_rank('error allocating array')
 
     ! vp (for checking the mesh and model)
     !minimum = minval( abs(rho_vp) )
@@ -417,7 +420,8 @@
     ! acoustic-elastic domains
     if (ACOUSTIC_SIMULATION .and. ELASTIC_SIMULATION) then
       ! saves points on acoustic-elastic coupling interface
-      allocate( iglob_tmp(NGLLSQUARE*num_coupling_ac_el_faces))
+      allocate( iglob_tmp(NGLLSQUARE*num_coupling_ac_el_faces),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 1044')
       inum = 0
       iglob_tmp(:) = 0
       do i=1,num_coupling_ac_el_faces
@@ -436,7 +440,8 @@
                         filename)
 
       ! saves acoustic/elastic flag
-      allocate(v_tmp_i(nspec))
+      allocate(v_tmp_i(nspec),stat=ier)
+      if (ier /= 0) call exit_MPI_without_rank('error allocating array 1045')
       do i=1,nspec
         if (ispec_is_acoustic(i)) then
           v_tmp_i(i) = 1

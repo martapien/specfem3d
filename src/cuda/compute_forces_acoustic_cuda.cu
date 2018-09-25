@@ -101,17 +101,19 @@ __launch_bounds__(NGLL3_PADDED,LAUNCH_MIN_BLOCKS_ACOUSTIC)
 #endif
 Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
                        const int* d_ibool,
+                       const int* d_irregular_element_number,
                        const int* d_phase_ispec_inner_acoustic,
                        const int num_phase_ispec_acoustic,
                        const int d_iphase,
-                       realw_const_p d_potential_acoustic,
-                       realw_p d_potential_dot_dot_acoustic,
-                       realw_const_p d_b_potential_acoustic,
-                       realw_p d_b_potential_dot_dot_acoustic,
+                       field_const_p d_potential_acoustic,
+                       field_p d_potential_dot_dot_acoustic,
+                       field_const_p d_b_potential_acoustic,
+                       field_p d_b_potential_dot_dot_acoustic,
                        const int nb_field,
                        realw* d_xix,realw* d_xiy,realw* d_xiz,
                        realw* d_etax,realw* d_etay,realw* d_etaz,
                        realw* d_gammax,realw* d_gammay,realw* d_gammaz,
+                       const realw xix_regular, const realw jacobian_regular,
                        realw_const_p d_hprime_xx,
                        realw_const_p hprimewgll_xx,
                        realw_const_p wgllwgll_xy,realw_const_p wgllwgll_xz,realw_const_p wgllwgll_yz,
@@ -134,24 +136,24 @@ Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
 
   int I,J,K;
   int iglob,offset;
-  int working_element;
+  int working_element,ispec_irreg;
 
-  realw temp1l,temp2l,temp3l;
+  field temp1l,temp2l,temp3l;
   realw xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl;
   realw jacobianl;
 
-  realw dpotentialdxl,dpotentialdyl,dpotentialdzl;
+  field dpotentialdxl,dpotentialdyl,dpotentialdzl;
   realw fac1,fac2,fac3;
   realw rho_invl,kappa_invl;
 
-  realw sum_terms;
-  realw gravity_term;
+  field sum_terms;
+  field gravity_term;
 
-  __shared__ realw s_dummy_loc[2*NGLL3];
+  __shared__ field s_dummy_loc[2*NGLL3];
 
-  __shared__ realw s_temp1[NGLL3];
-  __shared__ realw s_temp2[NGLL3];
-  __shared__ realw s_temp3[NGLL3];
+  __shared__ field s_temp1[NGLL3];
+  __shared__ field s_temp2[NGLL3];
+  __shared__ field s_temp3[NGLL3];
 
   __shared__ realw sh_hprime_xx[NGLL2];
   __shared__ realw sh_hprimewgll_xx[NGLL2];
@@ -197,14 +199,14 @@ Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
 
   // local padded index
   offset = working_element*NGLL3_PADDED + tx;
-
+  ispec_irreg = d_irregular_element_number[working_element] -1;
   // global index
   iglob = d_ibool[offset] - 1;
 
 // counts:
-// + 7 FLOP
+// + 8 FLOP
 //
-// + 2 float * 128 threads = 1024 BYTE
+// (1 int + 2 float) * 128 threads = 1536 BYTE
 
   // loads potential values into shared memory
   if (threadIdx.x < NGLL3) {
@@ -225,9 +227,8 @@ Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
 // + 1 float * 125 threads = 500 BYTE
 
   // gravity
-  if (gravity ){
-    kappa_invl = 1.f / d_kappastore[working_element*NGLL3 + tx];
-  }
+  if (gravity ) kappa_invl = 1.f / d_kappastore[working_element*NGLL3 + tx];
+
 
   // local index
   K = (tx/NGLL2);
@@ -244,19 +245,22 @@ Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
   //       loads all memory by texture loads (arrays accesses are coalescent, thus no need for texture reads)
   //
   // calculates laplacian
-  xixl = d_xix[offset];
-  xiyl = d_xiy[offset];
-  xizl = d_xiz[offset];
-  etaxl = d_etax[offset];
-  etayl = d_etay[offset];
-  etazl = d_etaz[offset];
-  gammaxl = d_gammax[offset];
-  gammayl = d_gammay[offset];
-  gammazl = d_gammaz[offset];
+  if (ispec_irreg >= 0){ //irregular_element
+    int offset = ispec_irreg*NGLL3_PADDED + tx;
+    xixl = d_xix[offset];
+    xiyl = d_xiy[offset];
+    xizl = d_xiz[offset];
+    etaxl = d_etax[offset];
+    etayl = d_etay[offset];
+    etazl = d_etaz[offset];
+    gammaxl = d_gammax[offset];
+    gammayl = d_gammay[offset];
+    gammazl = d_gammaz[offset];
 
-  jacobianl = 1.f / (xixl*(etayl*gammazl-etazl*gammayl)
-                    -xiyl*(etaxl*gammazl-etazl*gammaxl)
-                    +xizl*(etaxl*gammayl-etayl*gammaxl));
+    jacobianl = 1.f / (xixl*(etayl*gammazl-etazl*gammayl)
+                      -xiyl*(etaxl*gammazl-etazl*gammaxl)
+                      +xizl*(etaxl*gammayl-etayl*gammaxl));
+  }
 
   // density (reciproc)
   rho_invl = 1.f / d_rhostore[offset];
@@ -296,9 +300,9 @@ Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
   for (int k = 0 ; k < nb_field ; k++){
 
   // computes first matrix product
-  temp1l = 0.f;
-  temp2l = 0.f;
-  temp3l = 0.f;
+  temp1l = Make_field(0.f);
+  temp2l = Make_field(0.f);
+  temp3l = Make_field(0.f);
 
   for (int l=0;l<NGLLX;l++) {
     //assumes that hprime_xx = hprime_yy = hprime_zz
@@ -317,22 +321,29 @@ Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
 
   // compute derivatives of ux, uy and uz with respect to x, y and z
   // derivatives of potential
-  dpotentialdxl = xixl*temp1l + etaxl*temp2l + gammaxl*temp3l;
-  dpotentialdyl = xiyl*temp1l + etayl*temp2l + gammayl*temp3l;
-  dpotentialdzl = xizl*temp1l + etazl*temp2l + gammazl*temp3l;
+  if (threadIdx.x < NGLL3) {
+    if (ispec_irreg >= 0){ //irregular_element
+
+      dpotentialdxl = xixl*temp1l + etaxl*temp2l + gammaxl*temp3l;
+      dpotentialdyl = xiyl*temp1l + etayl*temp2l + gammayl*temp3l;
+      dpotentialdzl = xizl*temp1l + etazl*temp2l + gammazl*temp3l;
 
 // counts:
 // + 3 * 5 FLOP = 15 FLOP
 //
 // + 0 BYTE
 
-  // form the dot product with the test vector
-  if (threadIdx.x < NGLL3) {
-    s_temp1[tx] = jacobianl * rho_invl * (dpotentialdxl*xixl + dpotentialdyl*xiyl + dpotentialdzl*xizl);
-    s_temp2[tx] = jacobianl * rho_invl * (dpotentialdxl*etaxl + dpotentialdyl*etayl + dpotentialdzl*etazl);
-    s_temp3[tx] = jacobianl * rho_invl * (dpotentialdxl*gammaxl + dpotentialdyl*gammayl + dpotentialdzl*gammazl);
+      // form the dot product with the test vector
+      s_temp1[tx] = jacobianl * rho_invl * (dpotentialdxl*xixl + dpotentialdyl*xiyl + dpotentialdzl*xizl);
+      s_temp2[tx] = jacobianl * rho_invl * (dpotentialdxl*etaxl + dpotentialdyl*etayl + dpotentialdzl*etazl);
+      s_temp3[tx] = jacobianl * rho_invl * (dpotentialdxl*gammaxl + dpotentialdyl*gammayl + dpotentialdzl*gammazl);
+    }
+    else{
+      s_temp1[tx] = jacobian_regular * rho_invl * temp1l * xix_regular * xix_regular;
+      s_temp2[tx] = jacobian_regular * rho_invl * temp2l * xix_regular * xix_regular;
+      s_temp3[tx] = jacobian_regular * rho_invl * temp3l * xix_regular * xix_regular;
+    }
   }
-
   // pre-computes gravity sum term
   if (gravity ){
     // uses potential definition: s = grad(chi)
@@ -353,9 +364,9 @@ Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
   __syncthreads();
 
   // computes second matrix product
-  temp1l = 0.f;
-  temp2l = 0.f;
-  temp3l = 0.f;
+  temp1l = Make_field(0.f);
+  temp2l = Make_field(0.f);
+  temp3l = Make_field(0.f);
 
   for (int l=0;l<NGLLX;l++) {
     //assumes hprimewgll_xx = hprimewgll_yy = hprimewgll_zz
@@ -382,7 +393,8 @@ Kernel_2_acoustic_impl(const int nb_blocks_to_compute,
 //
 // + 3 float * 128 threads = 1536 BYTE
 
-  // assembles potential array
+  __syncthreads();
+// assembles potential array
   if (threadIdx.x < NGLL3) {
 #ifdef USE_MESH_COLORING_GPU
   // no atomic operation needed, colors don't share global points between elements
@@ -1009,7 +1021,6 @@ void Kernel_2_acoustic(int nb_blocks_to_compute, Mesh* mp, int d_iphase,
 #ifdef ENABLE_VERY_SLOW_ERROR_CHECKING
   exit_on_cuda_error("before acoustic kernel Kernel 2");
 #endif
-
   // if the grid can handle the number of blocks, we let it be 1D
   // grid_2_x = nb_elem_color;
   // nb_elem_color is just how many blocks we are computing now
@@ -1031,6 +1042,7 @@ void Kernel_2_acoustic(int nb_blocks_to_compute, Mesh* mp, int d_iphase,
   //This kernel treats both forward and adjoint wavefield within the same call, to increase performance ( ~37% faster for pure acoustic simulations )
   Kernel_2_acoustic_impl<1><<<grid,threads,0,mp->compute_stream>>>(nb_blocks_to_compute,
                                                                     d_ibool,
+                                                                    mp->d_irregular_element_number,
                                                                     mp->d_phase_ispec_inner_acoustic,
                                                                     mp->num_phase_ispec_acoustic,
                                                                     d_iphase,
@@ -1040,6 +1052,7 @@ void Kernel_2_acoustic(int nb_blocks_to_compute, Mesh* mp, int d_iphase,
                                                                     d_xix, d_xiy, d_xiz,
                                                                     d_etax, d_etay, d_etaz,
                                                                     d_gammax, d_gammay, d_gammaz,
+                                                                    mp->xix_regular,mp->jacobian_regular,
                                                                     mp->d_hprime_xx,
                                                                     mp->d_hprimewgll_xx,
                                                                     mp->d_wgllwgll_xy, mp->d_wgllwgll_xz, mp->d_wgllwgll_yz,
@@ -1201,9 +1214,9 @@ void FC_FUNC_(compute_forces_acoustic_cuda,
 
 
 __global__ void enforce_free_surface_cuda_kernel(
-                                       realw_p potential_acoustic,
-                                       realw_p potential_dot_acoustic,
-                                       realw_p potential_dot_dot_acoustic,
+                                       field_p potential_acoustic,
+                                       field_p potential_dot_acoustic,
+                                       field_p potential_dot_dot_acoustic,
                                        const int num_free_surface_faces,
                                        const int* free_surface_ispec,
                                        const int* free_surface_ijk,
@@ -1230,9 +1243,9 @@ __global__ void enforce_free_surface_cuda_kernel(
       int iglob = d_ibool[INDEX4_PADDED(NGLLX,NGLLX,NGLLX,i,j,k,ispec)] - 1;
 
       // sets potentials to zero at free surface
-      potential_acoustic[iglob] = 0;
-      potential_dot_acoustic[iglob] = 0;
-      potential_dot_dot_acoustic[iglob] = 0;
+      potential_acoustic[iglob] = Make_field(0.f);
+      potential_dot_acoustic[iglob] = Make_field(0.f);
+      potential_dot_dot_acoustic[iglob] = Make_field(0.f);
     }
   }
 }
